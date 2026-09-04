@@ -1,0 +1,8 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- matriz 3x3: a conjugação de porte e potencial poluidor -->
+    <path android:strokeColor="#E8EAED" android:strokeWidth="2.6" android:fillColor="#00000000"
+        android:pathData="M34,34 h40 v40 h-40 z M34,47.3 h40 M34,60.6 h40 M47.3,34 v40 M60.6,34 v40" />
+    <path android:fillColor="#7FD18F" android:pathData="M60.6,60.6 h13.4 v13.4 h-13.4 z" />
+</vector>

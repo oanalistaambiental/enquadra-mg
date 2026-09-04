@@ -1,0 +1,22 @@
+{
+  "norma": "Deliberação Normativa COPAM nº 217, de 06 de dezembro de 2017",
+  "complementos": [
+    "Decreto Estadual nº 47.383, de 02 de março de 2018 (prazos e modalidades)",
+    "Lei Estadual nº 21.972, de 21 de janeiro de 2016"
+  ],
+  "extraido_em": "2026-08-30",
+  "fontes_consultadas": [
+    "Cópia da DN 217 publicada por UDOP (udop.com.br)",
+    "Cópia da DN 217 publicada pela Prefeitura de Belo Horizonte (prefeitura.pbh.gov.br)",
+    "Decreto 47.383/2018, texto atualizado, Assembleia Legislativa de Minas Gerais (almg.gov.br)"
+  ],
+  "aviso": "Base montada a partir de cópias públicas, com conferência cruzada entre duas fontes independentes. NÃO é a publicação oficial. Antes de usar em processo, confira contra o texto oficial no SIAM/SEMAD.",
+  "conferencia": {
+    "tabela2": "cruzada — três leituras independentes concordam, com os cabeçalhos das linhas e colunas citados literalmente",
+    "tabela3": "cruzada — duas cópias independentes concordam nas 18 células",
+    "tabela4": "texto literal obtido de cópia; pesos conferidos",
+    "tabela5": "texto literal obtido de cópia",
+    "tabela1": "PENDENTE — a leitura obtida apresenta uma assimetria entre as variáveis (ar=G isolado resulta P, enquanto solo=G isolado resulta M) que pode ser erro de transcrição. Na prática esta tabela é secundária: a listagem de atividades já traz o potencial poluidor GERAL de cada atividade.",
+    "atividades": "somente a Listagem A (minerárias) — conferida por amostragem de 12 códigos entre duas cópias, com 11 coincidências exatas"
+  }
+}
