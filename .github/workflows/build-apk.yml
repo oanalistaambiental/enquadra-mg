@@ -6,6 +6,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   apk:
     runs-on: ubuntu-latest
@@ -46,3 +49,17 @@ jobs:
           name: relatorios-enquadra-mg
           path: app/build/reports/
           if-no-files-found: ignore
+
+      # Publica o APK num release de tag fixa, para haver sempre um link direto que se abre
+      # no navegador do celular e instala. O artefato do Actions exige login do GitHub e vem
+      # dentro de um zip — inutil no telefone, em campo.
+      - name: Publicar o APK em release de link fixo
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/build/outputs/apk/debug/*.apk enquadra-mg.apk
+          gh release delete apk --yes --cleanup-tag || true
+          gh release create apk enquadra-mg.apk \
+            --title "APK mais recente" \
+            --notes "Compilado do commit ${{ github.sha }} em $(date -u '+%d/%m/%Y %H:%M UTC'). Baixe o .apk abaixo direto no celular."
