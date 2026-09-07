@@ -10,7 +10,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.lightColorScheme
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -45,7 +47,23 @@ private enum class Rota { INICIO, ATIVIDADE, PORTE, LOCACIONAL, RESULTADO, NORMA
 private fun App() {
     val vm: SimulacaoViewModel = viewModel()
     val contexto = LocalContext.current
-    var rota by remember { mutableStateOf(Rota.INICIO) }
+    // rememberSaveable: com `remember`, girar o aparelho recriava a Activity e jogava o
+    // usuario de volta para a tela inicial no meio do preenchimento.
+    var rota by rememberSaveable { mutableStateOf(Rota.INICIO) }
+
+    /**
+     * O Voltar do sistema. Nao havia BackHandler nenhum: na tela de resultado, o gesto de
+     * voltar — que e o gesto natural — fechava o app e levava junto a simulacao inteira.
+     */
+    BackHandler(enabled = rota != Rota.INICIO) {
+        rota = when (rota) {
+            Rota.ATIVIDADE, Rota.NORMA -> Rota.INICIO
+            Rota.PORTE -> Rota.ATIVIDADE
+            Rota.LOCACIONAL -> Rota.PORTE
+            Rota.RESULTADO -> Rota.LOCACIONAL
+            Rota.INICIO -> Rota.INICIO
+        }
+    }
 
     Box(Modifier.fillMaxSize()) {
         when (rota) {
