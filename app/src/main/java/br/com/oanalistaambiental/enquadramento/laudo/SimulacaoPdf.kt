@@ -45,17 +45,33 @@ object SimulacaoPdf {
             typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
         }
 
+        // Quebra so no espaco deixava vazar pela margem direita qualquer palavra maior que a
+        // coluna — um caminho de arquivo, um codigo longo colado numa nota — e ignorava as
+        // quebras de linha que a propria base traz.
         fun quebrar(texto: String, p: Paint, largura: Float): List<String> {
             val linhas = mutableListOf<String>()
-            var atual = StringBuilder()
-            texto.split(" ").forEach { palavra ->
-                val teste = if (atual.isEmpty()) palavra else "$atual $palavra"
-                if (p.measureText(teste) > largura && atual.isNotEmpty()) {
-                    linhas += atual.toString(); atual = StringBuilder(palavra)
-                } else atual = StringBuilder(teste)
+            for (paragrafo in texto.split("\n")) {
+                var atual = StringBuilder()
+                for (palavra in paragrafo.split(" ")) {
+                    val teste = if (atual.isEmpty()) palavra else "$atual $palavra"
+                    when {
+                        p.measureText(teste) <= largura -> atual = StringBuilder(teste)
+                        atual.isNotEmpty() -> { linhas += atual.toString(); atual = StringBuilder(palavra) }
+                        else -> {
+                            var pedaco = StringBuilder()
+                            for (ch in palavra) {
+                                if (p.measureText(pedaco.toString() + ch) > largura && pedaco.isNotEmpty()) {
+                                    linhas += pedaco.toString(); pedaco = StringBuilder()
+                                }
+                                pedaco.append(ch)
+                            }
+                            atual = pedaco
+                        }
+                    }
+                }
+                if (atual.isNotEmpty()) linhas += atual.toString()
             }
-            if (atual.isNotEmpty()) linhas += atual.toString()
-            return linhas
+            return if (linhas.isEmpty()) listOf("") else linhas
         }
 
         fun escrever(texto: String, p: Paint, recuo: Float = 0f, espaco: Float = 14f) {
@@ -81,7 +97,42 @@ object SimulacaoPdf {
         escrever("Classe ${r.classe} · porte ${r.porte.extenso} · potencial poluidor geral " +
             "${r.potencialGeral.extenso} · critério locacional peso ${r.fatorLocacional}", cinza(10f))
         escrever("Prazo de análise: ${r.prazoAnaliseDias} dias. ${r.prazoAnaliseTexto}", cinza(10f))
-        escrever("Validade: ${r.modalidade.validadeTexto}", cinza(10f), espaco = 20f)
+        escrever(
+            "Validade: " + if (r.modalidade.validadePorLicenca.isEmpty())
+                "${r.modalidade.validadeAnos} anos"
+            else r.modalidade.validadePorLicenca.entries.sortedBy { it.value }
+                .joinToString(", ") { "${it.key} ${it.value} anos" },
+            cinza(10f)
+        )
+        escrever(r.modalidade.validadeTexto, cinza(9.5f), espaco = 20f)
+
+        // BLOCO NOVO. Faltava por completo, e sem ele o PDF nao permitia refazer a conta nem
+        // dizia de onde vieram os criterios — que e justamente o que o art. 6o, par. 5o manda
+        // documentar. Um parecer que nao mostra a entrada nao instrui processo.
+        escrever("DADOS INFORMADOS", titulo(12f), espaco = 16f)
+        r.valorInformado?.let { escrever("• ${it.descricao()}", cinza(10f), recuo = 8f, espaco = 12f) }
+        r.coordenadaConsultada?.let { (lat, lon) ->
+            escrever(
+                "• Coordenada consultada: %.6f, %.6f (SIRGAS 2000)".format(Locale.US, lat, lon),
+                cinza(10f), recuo = 8f, espaco = 12f
+            )
+        }
+        r.versaoPacote?.let {
+            escrever("• Pacote de camadas: versão $it", cinza(10f), recuo = 8f, espaco = 12f)
+        }
+        if (r.criteriosAutomaticos.isEmpty()) {
+            escrever(
+                "• Todos os critérios locacionais foram marcados manualmente por quem simulou.",
+                cinza(10f), recuo = 8f, espaco = 12f
+            )
+        } else {
+            escrever(
+                "• Critérios sugeridos pela consulta de camadas (confirmados por quem simulou): " +
+                    r.criteriosAutomaticos.joinToString(", "),
+                cinza(10f), recuo = 8f, espaco = 12f
+            )
+        }
+        y += 8f
 
         escrever("ESTUDOS EXIGIDOS", titulo(12f), espaco = 16f)
         r.modalidade.estudos.forEach { escrever("• $it", cinza(10f), recuo = 8f) }
