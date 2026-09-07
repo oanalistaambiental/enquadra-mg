@@ -10,19 +10,62 @@ Como usar:
   2. python3 importar-anexo.py atividades.csv > atividades.json
   3. Substitua app/src/main/assets/norma/atividades.json pelo arquivo gerado.
 
-Cabeçalho esperado:
-  codigo;descricao;ar;agua;solo;geral;parametro;unidade;limiteP;limiteM
+Cabeçalho esperado (as sete últimas colunas são opcionais):
+  codigo;descricao;ar;agua;solo;geral;parametro;unidade;limiteP;limiteM;
+  limitePExclusivo;limiteMExclusivo;unidadeAlternativa;limitePAlt;limiteMAlt;nota
+
+ATENÇÃO — bug corrigido em 07/09/2026. A versão anterior deste script NÃO emitia
+limitePExclusivo, unidadeAlternativa, limitePAlt, limiteMAlt nem nota. Como as instruções
+mandam SUBSTITUIR atividades.json pelo arquivo gerado, reimportar o Anexo apagava em silêncio
+as regras de fronteira já conferidas. Concretamente: A-03-01-8 perdia limitePExclusivo e um
+empreendimento com produção de exatamente 10.000 m³/ano caía de porte M (classe 3, LAS/RAS)
+para porte P (classe 2, LAS/Cadastro) — contrariando a nota da própria atividade. E o teste da
+base só confere limiteP < limiteM, então o CI passava verde.
+
+Colunas de fronteira, quando o Anexo usar "<" em vez de "≤":
+  limitePExclusivo=sim  →  o valor igual ao limiteP já é porte MÉDIO
+  limiteMExclusivo=sim  →  o valor igual ao limiteM já é porte GRANDE
 
 Para atividade categórica (ex.: barragem por classe), deixe limiteP e limiteM vazios e use:
   ...;parametro;categorias;Classe I=P|Classe II=M|Classe III=G;
 """
 import csv, json, sys, re
 
-def numero(txt):
+def numero(txt, linha=None, campo=None):
+    """
+    Lê um número da planilha SEM adivinhar separador.
+
+    A versão anterior fazia replace('.', '') incondicional — o mesmo bug que estava na tela do
+    app: "1.5" virava 15. Aqui, se houver ponto E vírgula, o último é o decimal; se houver só
+    um deles, ele é o decimal, e o separador de milhar precisa ser removido na planilha. Na
+    dúvida o script PARA em vez de chutar: é número que decide modalidade de licenciamento.
+    """
     if txt is None: return None
-    t = txt.strip().replace('.', '').replace(',', '.')
-    t = re.sub(r'[^0-9.\-]', '', t)
-    return float(t) if t else None
+    t = txt.strip()
+    if not t: return None
+    if re.search(r'[^0-9.,\-\s]', t):
+        sys.exit(f'linha {linha}: campo "{campo}" tem caractere inesperado — "{txt}"')
+    t = t.replace(' ', '')
+    ponto, virgula = t.rfind('.'), t.rfind(',')
+    if ponto >= 0 and virgula >= 0:
+        # o último separador é o decimal; o outro é milhar
+        if virgula > ponto: t = t.replace('.', '').replace(',', '.')
+        else: t = t.replace(',', '')
+    elif virgula >= 0:
+        if t.count(',') > 1:
+            sys.exit(f'linha {linha}: campo "{campo}" tem mais de uma vírgula — "{txt}"')
+        t = t.replace(',', '.')
+    elif ponto >= 0:
+        if t.count('.') > 1:
+            sys.exit(f'linha {linha}: campo "{campo}" tem mais de um ponto — "{txt}"')
+        # ponto único: DECIMAL. Se na sua planilha ele é separador de milhar, tire-o antes.
+    try:
+        return float(t)
+    except ValueError:
+        sys.exit(f'linha {linha}: campo "{campo}" não é número — "{txt}"')
+
+def booleano(txt):
+    return (txt or '').strip().lower() in ('sim', 's', 'true', '1', 'x')
 
 def main(caminho):
     atividades = []
@@ -57,12 +100,35 @@ def main(caminho):
             else:
                 a['tipo'] = 'numerico'
                 a['unidade'] = (linha.get('unidade') or '').strip()
-                lp, lm = numero(linha.get('limiteP')), numero(linha.get('limiteM'))
+                lp = numero(linha.get('limiteP'), i, 'limiteP')
+                lm = numero(linha.get('limiteM'), i, 'limiteM')
                 if lp is None or lm is None:
                     sys.exit(f'linha {i}: {codigo} sem limiteP/limiteM — o app não adivinha faixa de porte')
                 if lp >= lm:
                     sys.exit(f'linha {i}: {codigo} tem limiteP >= limiteM ({lp} >= {lm})')
                 a['limiteP'], a['limiteM'] = lp, lm
+
+                # Campos que a versão anterior perdia silenciosamente. Só entram no JSON quando
+                # estão preenchidos, para o arquivo não encher de chaves vazias.
+                if booleano(linha.get('limitePExclusivo')):
+                    a['limitePExclusivo'] = True
+                if booleano(linha.get('limiteMExclusivo')):
+                    a['limiteMExclusivo'] = True
+
+                ualt = (linha.get('unidadeAlternativa') or '').strip()
+                if ualt:
+                    lpa = numero(linha.get('limitePAlt'), i, 'limitePAlt')
+                    lma = numero(linha.get('limiteMAlt'), i, 'limiteMAlt')
+                    if lpa is None or lma is None:
+                        sys.exit(f'linha {i}: {codigo} tem unidadeAlternativa "{ualt}" sem '
+                                 f'limitePAlt/limiteMAlt — a tela quebra ao trocar de unidade')
+                    if lpa >= lma:
+                        sys.exit(f'linha {i}: {codigo} tem limitePAlt >= limiteMAlt ({lpa} >= {lma})')
+                    a['unidadeAlternativa'], a['limitePAlt'], a['limiteMAlt'] = ualt, lpa, lma
+
+            nota = (linha.get('nota') or '').strip()
+            if nota:
+                a['nota'] = nota
 
             atividades.append(a)
 
