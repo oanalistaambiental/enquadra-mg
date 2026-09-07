@@ -26,7 +26,21 @@ object Enquadramento {
         val prazoAnaliseDias: Int,
         val prazoAnaliseTexto: String,
         val passos: List<Passo>,
-        val avisos: List<String>
+        val avisos: List<String>,
+        /**
+         * O valor que produziu o porte, para o PDF poder ser conferido.
+         *
+         * Sem isto o documento dizia "Porte: MEDIO — parametro: Producao bruta" e nada mais:
+         * 500.000 t/ano e 5.000 t/ano geravam a mesma linha, e nao havia como refazer a conta
+         * a partir do parecer.
+         */
+        val valorInformado: ValorInformado? = null,
+        /** Coordenada usada na consulta de camadas, quando houve. */
+        val coordenadaConsultada: Pair<Double, Double>? = null,
+        /** Versao do pacote de camadas que sustentou a sugestao automatica. */
+        val versaoPacote: String? = null,
+        /** Ids dos criterios que vieram da sugestao automatica, e nao da mao de quem assina. */
+        val criteriosAutomaticos: Set<String> = emptySet()
     )
 
     class DadoFaltante(mensagem: String) : Exception(mensagem)
@@ -110,7 +124,11 @@ object Enquadramento {
         porte: Grau,
         criteriosIncidentes: List<CriterioLocacional>,
         fatoresIncidentes: List<FatorRestricao> = emptyList(),
-        comEiaOuAudiencia: Boolean = false
+        comEiaOuAudiencia: Boolean = false,
+        valorInformado: ValorInformado? = null,
+        coordenadaConsultada: Pair<Double, Double>? = null,
+        versaoPacote: String? = null,
+        criteriosAutomaticos: Set<String> = emptySet()
     ): Resultado {
         val ppGeral = atividade.pp.geral
         val classe = classeDe(regras, porte, ppGeral)
@@ -130,7 +148,8 @@ object Enquadramento {
                 "DN 217/2017, Anexo Único, Listagem de Atividades"))
             add(Passo("Porte", porte.extenso.uppercase(),
                 if (atividade.tipo == "manual") "DN 217/2017, art. 4º — informado por quem simulou"
-                else "DN 217/2017, art. 4º — parâmetro: ${atividade.parametro}"))
+                else "DN 217/2017, art. 4º — " +
+                    (valorInformado?.descricao() ?: "parâmetro: ${atividade.parametro}")))
             add(Passo("Potencial poluidor/degradador geral", ppGeral.extenso.uppercase(),
                 if (atividade.tipo == "manual") "DN 217/2017, art. 3º — informado por quem simulou"
                 else "DN 217/2017, art. 3º — ar ${atividade.pp.ar}, água ${atividade.pp.agua}, solo ${atividade.pp.solo}"))
@@ -185,7 +204,11 @@ object Enquadramento {
             prazoAnaliseDias = prazoDias,
             prazoAnaliseTexto = prazoTexto,
             passos = passos,
-            avisos = avisos
+            avisos = avisos,
+            valorInformado = valorInformado,
+            coordenadaConsultada = coordenadaConsultada,
+            versaoPacote = versaoPacote,
+            criteriosAutomaticos = criteriosAutomaticos
         )
     }
 }

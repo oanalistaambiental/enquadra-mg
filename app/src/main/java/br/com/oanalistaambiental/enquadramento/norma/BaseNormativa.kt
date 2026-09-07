@@ -40,7 +40,18 @@ object BaseNormativa {
                     texto = c.getString("texto"),
                     camada = if (c.isNull("camada")) null else c.getString("camada"),
                     automatico = c.optBoolean("automatico", false),
-                    nota = if (c.isNull("nota")) null else c.optString("nota").ifBlank { null }
+                    nota = if (c.isNull("nota")) null else c.optString("nota").ifBlank { null },
+                    filtro = c.optJSONObject("filtro")?.let { f ->
+                        fun lista(chave: String): List<String> =
+                            f.optJSONArray(chave)?.let { a -> (0 until a.length()).map { a.getString(it) } }
+                                ?: emptyList()
+                        FiltroAtributo(
+                            campos = lista("campos"),
+                            contem = lista("contem"),
+                            naoContem = lista("naoContem"),
+                            naoIgual = lista("naoIgual")
+                        )
+                    }
                 )
             }
         }

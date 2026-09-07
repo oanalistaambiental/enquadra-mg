@@ -48,7 +48,33 @@ data class CriterioLocacional(
     val texto: String,
     val camada: String?,
     val automatico: Boolean,
-    val nota: String? = null
+    val nota: String? = null,
+    /**
+     * Como separar dois criterios que dividem a MESMA camada.
+     *
+     * Bug real: `uc_protecao_integral` (peso 2) e `uc_uso_sustentavel` (peso 1) apontam ambos
+     * para a camada `areas_protegidas`, e a deteccao so olhava geometria. Um ponto dentro de
+     * uma APA disparava os dois — fator locacional 2 — quando a propria Tabela 4 exclui APA do
+     * criterio de uso sustentavel e APA nem sequer e protecao integral. Para uma atividade
+     * classe 3, isso levava de LAS/RAS a LAC2. Dois degraus, por causa de um atributo que
+     * estava no pacote e nao era lido.
+     */
+    val filtro: FiltroAtributo? = null
+)
+
+/**
+ * Filtro pelos atributos da feicao. Comparacao sem acento e sem caixa, porque o nome da coluna
+ * e o texto do valor variam entre as fontes que montam o pacote.
+ */
+data class FiltroAtributo(
+    /** Colunas onde procurar, em ordem de preferencia. */
+    val campos: List<String>,
+    /** Aceita quando o valor CONTEM qualquer um destes. Vazio = aceita qualquer valor. */
+    val contem: List<String> = emptyList(),
+    /** Recusa quando o valor contem qualquer um destes. */
+    val naoContem: List<String> = emptyList(),
+    /** Recusa quando o valor inteiro e exatamente um destes (util para siglas como "APA"). */
+    val naoIgual: List<String> = emptyList()
 )
 
 data class FatorRestricao(
@@ -98,4 +124,25 @@ data class Regras(
     fun modalidade(sigla: String): Modalidade? = modalidades.firstOrNull { it.sigla == sigla }
     fun atividade(codigo: String): Atividade? = atividades.firstOrNull { it.codigo == codigo }
     fun criterio(id: String): CriterioLocacional? = criterios.firstOrNull { it.id == id }
+}
+
+/**
+ * O que o usuario informou para chegar ao porte.
+ *
+ * Sem isto, o PDF dizia "Porte: MEDIO — parametro: Producao bruta" e ponto. Nao havia como
+ * refazer a conta a partir do documento: 500.000 t/ano e 5.000 t/ano produzem a mesma linha.
+ * Um parecer que nao permite refazer a conta nao instrui processo nenhum.
+ */
+data class ValorInformado(
+    /** Null quando o porte veio de uma categoria nominal em vez de um numero. */
+    val valor: Double?,
+    val unidade: String,
+    val parametro: String,
+    val categoria: String? = null
+) {
+    fun descricao(): String = when {
+        categoria != null -> "$parametro: $categoria"
+        valor != null -> "$parametro: ${Numeros.porExtenso(valor)} $unidade".trim()
+        else -> parametro
+    }
 }
