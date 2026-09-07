@@ -15,6 +15,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import br.com.oanalistaambiental.enquadramento.geo.Coordenadas
+import br.com.oanalistaambiental.enquadramento.geo.Utm
 import br.com.oanalistaambiental.enquadramento.norma.Grau
 
 /* ------------------------------------------------------- CRITÉRIO LOCACIONAL */
@@ -26,8 +28,8 @@ fun TelaLocacional(vm: SimulacaoViewModel, avancar: () -> Unit, voltar: () -> Un
     val fatores by vm.fatoresMarcados.collectAsState()
     val deteccao by vm.deteccao.collectAsState()
     val comEia by vm.comEia.collectAsState()
-    var lat by remember { mutableStateOf("") }
-    var lon by remember { mutableStateOf("") }
+    var coordenada by remember { mutableStateOf("") }
+    val lida = remember(coordenada) { Coordenadas.interpretar(coordenada) }
     val r = regras ?: return
 
     val incidentes = r.criterios.filter { it.id in marcados }
@@ -47,19 +49,44 @@ fun TelaLocacional(vm: SimulacaoViewModel, avancar: () -> Unit, voltar: () -> Un
                         color = Cores.textoFraco, fontSize = 12.sp, lineHeight = 17.sp
                     )
                     Spacer(Modifier.height(10.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(lat, { lat = it }, label = { Text("Latitude") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true, modifier = Modifier.weight(1f))
-                        OutlinedTextField(lon, { lon = it }, label = { Text("Longitude") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true, modifier = Modifier.weight(1f))
+                    // BUG corrigido, e impedia usar o recurso: eram dois campos com
+                    // KeyboardType.Number, que na maioria dos teclados do Android NAO tem o
+                    // sinal de menos — ou seja, era impossivel digitar uma latitude no Brasil.
+                    // E, se o texto nao virasse numero, o botao nao fazia nada, em silencio.
+                    // Agora e um campo so, que aceita colar nos tres formatos que aparecem de
+                    // verdade, mostra como interpretou e diz quando nao entendeu.
+                    OutlinedTextField(
+                        coordenada, { coordenada = it },
+                        label = { Text("Coordenada do empreendimento") },
+                        singleLine = true, modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    when {
+                        coordenada.isBlank() -> Mono(
+                            "aceita  -19.9167, -43.9345   ·   19°55'00\"S 43°56'04\"W   ·   23S 611520E 7797383N",
+                            Cores.textoFraco, 10
+                        )
+                        lida == null -> Text(
+                            "Não reconheci esse formato. Confira se os dois valores estão " +
+                                "presentes e se o separador é vírgula ou espaço.",
+                            color = Cores.atencao, fontSize = 11.5.sp, lineHeight = 16.sp
+                        )
+                        else -> {
+                            Mono("lido como ${lida.formato}: %.6f, %.6f".format(lida.lat, lida.lon), Cores.texto, 11)
+                            Spacer(Modifier.height(2.dp))
+                            Mono(Utm.projetar(lida.lat, lida.lon).formatado(), Cores.textoFraco, 10)
+                            lida.aviso?.let {
+                                Spacer(Modifier.height(4.dp))
+                                Text(it, color = Cores.atencao, fontSize = 11.sp, lineHeight = 15.sp)
+                            }
+                        }
                     }
                     Spacer(Modifier.height(10.dp))
                     Botao("Verificar camadas neste ponto") {
-                        val la = lat.replace(',', '.').toDoubleOrNull()
-                        val lo = lon.replace(',', '.').toDoubleOrNull()
-                        if (la != null && lo != null) vm.detectarPorCoordenada(la, lo)
+                        val l = lida
+                        if (l == null) vm.avisar(
+                            "Informe uma coordenada válida antes de verificar as camadas."
+                        ) else vm.detectarPorCoordenada(l.lat, l.lon)
                     }
                     deteccao?.let { d ->
                         Spacer(Modifier.height(8.dp))

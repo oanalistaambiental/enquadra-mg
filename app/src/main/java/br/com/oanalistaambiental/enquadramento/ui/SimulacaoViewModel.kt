@@ -180,5 +180,8 @@ class SimulacaoViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Aviso curto na barra inferior. */
+    fun avisar(texto: String) { _mensagem.value = texto }
+
     fun limparMensagem() { _mensagem.value = null }
 }
