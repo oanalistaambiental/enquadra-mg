@@ -7,7 +7,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -28,9 +31,17 @@ fun TelaLocacional(vm: SimulacaoViewModel, avancar: () -> Unit, voltar: () -> Un
     val fatores by vm.fatoresMarcados.collectAsState()
     val deteccao by vm.deteccao.collectAsState()
     val comEia by vm.comEia.collectAsState()
-    var coordenada by remember { mutableStateOf("") }
+    var coordenada by rememberSaveable { mutableStateOf("") }
+    val pacoteInstalado by vm.pacoteInstalado.collectAsState()
+    LaunchedEffect(Unit) { vm.conferirPacote() }
+    // Seletor de arquivo do sistema. E o unico caminho pelo qual o pacote de camadas pode
+    // chegar ao aparelho sem adb — antes nao havia caminho nenhum.
+    val escolherPacote = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri -> if (uri != null) vm.instalarPacote(uri) }
     val lida = remember(coordenada) { Coordenadas.interpretar(coordenada) }
-    val r = regras ?: return
+    val erroBase by vm.erroBase.collectAsState()
+    val r = regras ?: return Carregando("3. Critério locacional", voltar, erroBase)
 
     val incidentes = r.criterios.filter { it.id in marcados }
     val peso = incidentes.maxOfOrNull { it.peso } ?: 0
@@ -88,6 +99,21 @@ fun TelaLocacional(vm: SimulacaoViewModel, avancar: () -> Unit, voltar: () -> Un
                             "Informe uma coordenada válida antes de verificar as camadas."
                         ) else vm.detectarPorCoordenada(l.lat, l.lon)
                     }
+                    Spacer(Modifier.height(8.dp))
+                    if (!pacoteInstalado) {
+                        Text(
+                            "Nenhum pacote de camadas instalado neste aparelho. Sem ele, a " +
+                                "verificação por coordenada não tem o que consultar — marque os " +
+                                "critérios à mão, ou instale o arquivo .gpkg abaixo.",
+                            color = Cores.atencao, fontSize = 11.5.sp, lineHeight = 16.sp
+                        )
+                        Spacer(Modifier.height(8.dp))
+                    }
+                    Botao(if (pacoteInstalado) "Trocar pacote de camadas" else "Instalar pacote de camadas") {
+                        // */* e nao application/geopackage: o Android nao reconhece a
+                        // extensao .gpkg e o seletor apareceria vazio, sem explicacao.
+                        escolherPacote.launch(arrayOf("*/*"))
+                    }
                     deteccao?.let { d ->
                         Spacer(Modifier.height(8.dp))
                         Mono("pacote ${d.versaoPacote}")
@@ -95,6 +121,25 @@ fun TelaLocacional(vm: SimulacaoViewModel, avancar: () -> Unit, voltar: () -> Un
                             Spacer(Modifier.height(4.dp))
                             Mono("camadas ausentes no pacote: ${d.camadasNaoInstaladas.joinToString(", ")}",
                                 Cores.atencao, 10)
+                        }
+                        if (d.camadasComFalha.isNotEmpty()) {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "SEM LEITURA: ${d.camadasComFalha.joinToString(", ")}. Isto NÃO " +
+                                    "quer dizer que não incide — quer dizer que a camada não " +
+                                    "pôde ser consultada. Reinstale o pacote.",
+                                color = Cores.alerta, fontSize = 11.sp, lineHeight = 15.sp
+                            )
+                        }
+                        if (d.aConferir.isNotEmpty()) {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "A CONFERIR à mão: ${d.aConferir.joinToString(", ") { it.id }}. " +
+                                    "A geometria bate, mas o pacote não traz a categoria da UC — " +
+                                    "e o critério depende dela (APA, por exemplo, é excluída do " +
+                                    "critério de uso sustentável).",
+                                color = Cores.atencao, fontSize = 11.sp, lineHeight = 15.sp
+                            )
                         }
                     }
                 }
@@ -155,7 +200,13 @@ fun TelaLocacional(vm: SimulacaoViewModel, avancar: () -> Unit, voltar: () -> Un
 
                 Spacer(Modifier.height(18.dp))
                 Box(Modifier.padding(horizontal = 16.dp)) {
-                    Botao("Calcular enquadramento", principal = true) { vm.calcular(); avancar() }
+                    // `vm.calcular(); avancar()` era incondicional. Falhando o calculo, a tela
+                    // de resultado exibia A SIMULACAO ANTERIOR com cara de resultado novo,
+                    // enquanto o erro passava cinco segundos na barra de baixo. Documento
+                    // assinavel com o numero errado. Agora so avanca se houve resultado novo.
+                    Botao("Calcular enquadramento", principal = true) {
+                        if (vm.calcularComRetorno()) avancar()
+                    }
                 }
                 Spacer(Modifier.height(28.dp))
             }
@@ -329,7 +380,8 @@ private fun Indicador(rotulo: String, valor: String) {
 @Composable
 fun TelaNorma(vm: SimulacaoViewModel, voltar: () -> Unit) {
     val regras by vm.regras.collectAsState()
-    val r = regras ?: return
+    val erroBase by vm.erroBase.collectAsState()
+    val r = regras ?: return Carregando("A norma", voltar, erroBase)
 
     Column(Modifier.fillMaxSize().background(Cores.fundo).windowInsetsPadding(WindowInsets.safeDrawing)) {
         Cabecalho("A norma", r.procedencia["norma"], voltar)

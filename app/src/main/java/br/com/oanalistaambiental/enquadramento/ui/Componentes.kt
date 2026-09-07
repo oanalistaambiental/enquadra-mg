@@ -113,3 +113,35 @@ fun LinhaDado(rotulo: String, valor: String, destaque: Boolean = false) {
             fontWeight = if (destaque) FontWeight.SemiBold else FontWeight.Normal)
     }
 }
+
+/**
+ * Tela de espera com saida.
+ *
+ * BUG corrigido: quatro telas faziam `val r = regras ?: return`, e `return` cru num Composable
+ * desenha NADA — sem cabecalho, sem botao voltar, sem indicacao de que algo esta carregando.
+ * Combinado com a ausencia de BackHandler, quem caisse nisso ficava preso numa tela branca sem
+ * saida a nao ser matar o app. Agora ha titulo, explicacao e caminho de volta.
+ */
+@Composable
+fun Carregando(titulo: String, voltar: (() -> Unit)? = null, erro: String? = null) {
+    Column(
+        Modifier.fillMaxSize().background(Cores.fundo).windowInsetsPadding(WindowInsets.safeDrawing)
+    ) {
+        Cabecalho(titulo, voltar = voltar)
+        Column(Modifier.fillMaxWidth().padding(24.dp)) {
+            Text(
+                erro ?: "Carregando a base normativa…",
+                color = if (erro != null) Cores.alerta else Cores.textoFraco,
+                fontSize = 14.sp, lineHeight = 20.sp
+            )
+            if (erro != null) {
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "A base fica em app/src/main/assets/norma. Se o erro persistir, o arquivo " +
+                        "citado acima está malformado.",
+                    color = Cores.textoFraco, fontSize = 12.sp, lineHeight = 17.sp
+                )
+            }
+        }
+    }
+}

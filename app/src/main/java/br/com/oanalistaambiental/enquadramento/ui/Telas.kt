@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -79,8 +80,9 @@ fun TelaInicio(vm: SimulacaoViewModel, irParaSimulacao: () -> Unit, irParaNorma:
 @Composable
 fun TelaAtividade(vm: SimulacaoViewModel, avancar: () -> Unit, voltar: () -> Unit) {
     val regras by vm.regras.collectAsState()
-    var busca by remember { mutableStateOf("") }
-    val r = regras ?: return
+    var busca by rememberSaveable { mutableStateOf("") }
+    val erroBase by vm.erroBase.collectAsState()
+    val r = regras ?: return Carregando("1. Atividade", voltar, erroBase)
 
     val lista = remember(busca, r) {
         if (busca.isBlank()) r.atividades
@@ -159,9 +161,10 @@ fun TelaPorte(vm: SimulacaoViewModel, avancar: () -> Unit, voltar: () -> Unit) {
     val a by vm.atividade.collectAsState()
     val porte by vm.porte.collectAsState()
     val potencial by vm.potencialManual.collectAsState()
-    var valor by remember { mutableStateOf("") }
-    var alternativa by remember { mutableStateOf(false) }
-    val atividade = a ?: return
+    // rememberSaveable: girar o aparelho apagava o valor ja digitado.
+    var valor by rememberSaveable { mutableStateOf("") }
+    var alternativa by rememberSaveable { mutableStateOf(false) }
+    val atividade = a ?: return Carregando("2. Porte e potencial", voltar)
     val manual = atividade.tipo == "manual"
 
     Column(Modifier.fillMaxSize().background(Cores.fundo).windowInsetsPadding(WindowInsets.safeDrawing)) {
@@ -211,8 +214,9 @@ fun TelaPorte(vm: SimulacaoViewModel, avancar: () -> Unit, voltar: () -> Unit) {
                                                 // BUG corrigido: trocar a unidade sem recalcular
                                                 // deixava valer o porte da unidade anterior, e ele
                                                 // seguia para o resultado e para o PDF sem aviso.
-                                                val n = valor.replace(".", "").replace(',', '.').toDoubleOrNull()
-                                                if (n != null) vm.calcularPorte(n, alt)
+                                                // Passar null quando o campo nao le LIMPA o porte,
+                                                // em vez de deixar o anterior de pe.
+                                                vm.calcularPorte(Numeros.ler(valor), alt)
                                             },
                                             label = { Text(rot ?: "—", fontSize = 12.sp) },
                                             modifier = Modifier.padding(end = 8.dp)
@@ -224,15 +228,44 @@ fun TelaPorte(vm: SimulacaoViewModel, avancar: () -> Unit, voltar: () -> Unit) {
                             OutlinedTextField(
                                 value = valor,
                                 onValueChange = { v ->
-                                    valor = v.filter { it.isDigit() || it == '.' || it == ',' }
-                                    val n = valor.replace(".", "").replace(',', '.').toDoubleOrNull()
-                                    if (n != null) vm.calcularPorte(n, alternativa)
+                                    // Numeros.filtrar aceita digitos e UM separador decimal, e
+                                    // recusa separador de milhar. Nao ha heuristica aqui de
+                                    // proposito: "1.500" e ambiguo entre mil e quinhentos e um
+                                    // e meio, e chutar errado num numero que decide modalidade
+                                    // de licenciamento e inaceitavel.
+                                    valor = Numeros.filtrar(v)
+                                    vm.calcularPorte(Numeros.ler(valor), alternativa)
                                 },
                                 label = {
                                     Text("Valor em ${if (alternativa) atividade.unidadeAlternativa else atividade.unidade}")
                                 },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                supportingText = {
+                                    Text(
+                                        "Vírgula para decimal, sem ponto de milhar. " +
+                                            "Ex.: 1500000 ou 3,5",
+                                        fontSize = 11.sp
+                                    )
+                                },
+                                // KeyboardType.Decimal, nao Number: o teclado Number nao
+                                // oferece virgula na maioria dos aparelhos, e era justamente o
+                                // separador decimal que o usuario precisava digitar.
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                 modifier = Modifier.fillMaxWidth(), singleLine = true
+                            )
+                            // Devolve o numero por extenso: quem digita confere a ordem de
+                            // grandeza ANTES de seguir, que e onde o erro de casa decimal
+                            // costuma passar despercebido.
+                            val lido = Numeros.ler(valor)
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                when {
+                                    valor.isBlank() -> "Informe o valor do parâmetro."
+                                    lido == null -> "Valor não reconhecido. Use só dígitos e uma vírgula decimal."
+                                    else -> "Lido como ${Numeros.porExtenso(lido)} " +
+                                        "${if (alternativa) atividade.unidadeAlternativa else atividade.unidade}"
+                                },
+                                color = if (lido == null && valor.isNotBlank()) Cores.alerta else Cores.textoFraco,
+                                fontSize = 12.sp
                             )
                         }
                         Rotulo("FAIXAS DESTA ATIVIDADE")
@@ -240,10 +273,27 @@ fun TelaPorte(vm: SimulacaoViewModel, avancar: () -> Unit, voltar: () -> Unit) {
                             val lp = if (alternativa) atividade.limitePAlt else atividade.limiteP
                             val lm = if (alternativa) atividade.limiteMAlt else atividade.limiteM
                             val un = if (alternativa) atividade.unidadeAlternativa else atividade.unidade
-                            val sinal = if (atividade.limitePExclusivo) "<" else "≤"
-                            LinhaDado("Pequeno", "$sinal ${nf.format(lp)} $un", porte == Grau.P)
-                            LinhaDado("Médio", "até ${nf.format(lm)} $un", porte == Grau.M)
-                            LinhaDado("Grande", "acima de ${nf.format(lm)} $un", porte == Grau.G)
+                            // As faixas eram exibidas como "Pequeno <= X" / "Medio ate Y" /
+                            // "Grande acima de Y". Lido ao pe da letra, "Medio: ate Y" inclui
+                            // tudo abaixo de Y e SOBREPOE a faixa Pequeno — e quem usa isto
+                            // precisa citar a faixa num parecer. Agora cada faixa mostra piso e
+                            // teto, e o `limiteMExclusivo` deixa de ser ignorado.
+                            //
+                            // nf.format tambem lancava IllegalArgumentException com limite
+                            // nulo: uma atividade com unidade alternativa sem limitePAlt fazia
+                            // o app fechar ao tocar no chip da unidade.
+                            fun num(v: Double?): String = v?.let { nf.format(it) } ?: "—"
+                            val abaixoP = if (atividade.limitePExclusivo) "<" else "≤"
+                            val acimaP = if (atividade.limitePExclusivo) "a partir de" else "acima de"
+                            val abaixoM = if (atividade.limiteMExclusivo) "<" else "≤"
+                            val acimaM = if (atividade.limiteMExclusivo) "a partir de" else "acima de"
+                            LinhaDado("Pequeno", "$abaixoP ${num(lp)} $un", porte == Grau.P)
+                            LinhaDado(
+                                "Médio",
+                                "$acimaP ${num(lp)} e $abaixoM ${num(lm)} $un",
+                                porte == Grau.M
+                            )
+                            LinhaDado("Grande", "$acimaM ${num(lm)} $un", porte == Grau.G)
                         }
                         atividade.nota?.let { Aviso(it, TipoAviso.ATENCAO) }
                     }

@@ -29,6 +29,17 @@ class SimulacaoViewModel(app: Application) : AndroidViewModel(app) {
     private val _porte = MutableStateFlow<Grau?>(null)
     val porte: StateFlow<Grau?> = _porte
 
+    /**
+     * O valor que o usuario informou, guardado para chegar ao resultado e ao PDF.
+     *
+     * Faltava por completo: o `Resultado` guardava so o Grau, e a memoria de calculo dizia
+     * "Porte: MEDIO — parametro: Producao bruta". Quem lesse o PDF nao tinha como refazer a
+     * conta, porque nao sabia se foram 500.000 t/ano ou 5.000 — e um parecer que nao permite
+     * refazer a conta nao serve para instruir processo.
+     */
+    private val _valorInformado = MutableStateFlow<ValorInformado?>(null)
+    val valorInformado: StateFlow<ValorInformado?> = _valorInformado
+
     /** Modo manual: o usuário informa porte e potencial sem escolher atividade do catálogo. */
     private val _potencialManual = MutableStateFlow<Grau?>(null)
     val potencialManual: StateFlow<Grau?> = _potencialManual
@@ -51,8 +62,70 @@ class SimulacaoViewModel(app: Application) : AndroidViewModel(app) {
     private val _deteccao = MutableStateFlow<DeteccaoLocacional.Incidencia?>(null)
     val deteccao: StateFlow<DeteccaoLocacional.Incidencia?> = _deteccao
 
+    /**
+     * Quais criterios vieram da consulta as camadas, e nao da mao do usuario.
+     *
+     * Existe por duas razoes. A primeira e um bug: a deteccao SOMAVA ao conjunto ja marcado e
+     * nunca limpava o que ela mesma tinha marcado antes. Quem colasse a coordenada com o sinal
+     * trocado, marcasse "UC de protecao integral" (peso 2) por engano do app, corrigisse a
+     * coordenada e consultasse de novo, recebia "Nenhuma camada incide neste ponto" — com o
+     * peso 2 ainda marcado, e o enquadramento saindo LAC2 em vez de LAS/RAS. A segunda e que o
+     * art. 6o, par. 5o manda documentar a origem de cada criterio, e o PDF precisa distinguir
+     * "o app sugeriu" de "o responsavel afirmou".
+     */
+    private val _criteriosAutomaticos = MutableStateFlow<Set<String>>(emptySet())
+    val criteriosAutomaticos: StateFlow<Set<String>> = _criteriosAutomaticos
+
     val arquivoPacote: File
         get() = File(getApplication<Application>().getExternalFilesDir(null), "pacotes/mg-base.gpkg")
+
+    private val _pacoteInstalado = MutableStateFlow(false)
+    val pacoteInstalado: StateFlow<Boolean> = _pacoteInstalado
+
+    fun conferirPacote() { _pacoteInstalado.value = arquivoPacote.exists() }
+
+    /**
+     * Instala o pacote de camadas a partir de um arquivo escolhido pelo usuario.
+     *
+     * ISTO NAO EXISTIA. `arquivoPacote` apontava para uma pasta que nenhuma tela sabia
+     * preencher: nao havia importacao, nem download, nem asset embarcado. Na pratica, todo
+     * usuario que tocasse em "Verificar camadas neste ponto" recebia "Pacote de camadas não
+     * instalado" para sempre, enquanto o cartao logo acima vendia a consulta ao IDE-Sisema
+     * como funcionalidade central e citava o art. 6o, par. 5o. Beco sem saida para quem nao
+     * tem adb.
+     */
+    fun instalarPacote(uri: android.net.Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val ctx = getApplication<Application>()
+                val destino = arquivoPacote
+                destino.parentFile?.mkdirs()
+                // Grava num temporario e so entao substitui: uma copia interrompida na metade
+                // produzia um .gpkg truncado que ABRE normalmente e devolve consulta vazia —
+                // ou seja, "nenhuma restricao aqui" quando a verdade e "nao consegui ler".
+                val temp = File(destino.parentFile, destino.name + ".parcial")
+                ctx.contentResolver.openInputStream(uri).use { entrada ->
+                    checkNotNull(entrada) { "Não foi possível abrir o arquivo escolhido." }
+                    temp.outputStream().use { entrada.copyTo(it) }
+                }
+                check(temp.length() > 0) { "O arquivo escolhido está vazio." }
+                // Conferencia antes de valer: se nao der para listar as camadas, nao instala.
+                val camadas = DeteccaoLocacional.abrir(temp).use { it.camadasDoPacote() }
+                check(camadas.isNotEmpty()) {
+                    "O arquivo abriu, mas não tem a tabela de camadas de um pacote de perícia."
+                }
+                if (destino.exists()) destino.delete()
+                check(temp.renameTo(destino)) { "Não foi possível gravar o pacote." }
+                camadas.size
+            }.onSuccess { n ->
+                _pacoteInstalado.value = true
+                _mensagem.value = "Pacote instalado: $n camada(s). Já dá para verificar por coordenada."
+            }.onFailure {
+                _pacoteInstalado.value = arquivoPacote.exists()
+                _mensagem.value = "Não foi possível instalar o pacote: ${it.message}"
+            }
+        }
+    }
 
     init {
         viewModelScope.launch(Dispatchers.IO) {
@@ -70,39 +143,76 @@ class SimulacaoViewModel(app: Application) : AndroidViewModel(app) {
     fun novaSimulacao() {
         _atividade.value = null
         _porte.value = null
+        _valorInformado.value = null
+        _criteriosAutomaticos.value = emptySet()
         _potencialManual.value = null
         _marcados.value = emptySet()
         _fatoresMarcados.value = emptySet()
         _comEia.value = false
         _resultado.value = null
         _deteccao.value = null
+        ultimaCoordenada = null
+        _fatoresAutomaticos = emptySet()
     }
 
     fun escolherAtividade(a: Atividade) {
         _atividade.value = a
         _porte.value = null
+        _valorInformado.value = null
         _potencialManual.value = null
     }
 
     fun definirPorteManual(g: Grau) { _porte.value = g }
     fun definirPotencialManual(g: Grau) { _potencialManual.value = g }
 
-    fun calcularPorte(valor: Double, usarAlternativa: Boolean) {
+    /**
+     * [valor] nulo LIMPA o porte, e isso e a correcao de um bug real.
+     *
+     * Antes a tela so chamava esta funcao quando o texto parseava. Se o usuario digitasse
+     * 2.000.000, visse "Porte GRANDE", selecionasse tudo e apagasse, o campo ficava vazio mas
+     * o cartao continuava dizendo GRANDE, o botao "Continuar" seguia habilitado, e o resultado
+     * e o PDF saiam com um porte que nao correspondia a valor nenhum informado. O mesmo
+     * acontecia ao trocar a unidade com o campo vazio.
+     */
+    fun calcularPorte(valor: Double?, usarAlternativa: Boolean) {
         val a = _atividade.value ?: return
+        if (valor == null) {
+            _porte.value = null
+            _valorInformado.value = null
+            return
+        }
         runCatching { Enquadramento.porteDe(a, valor, usarAlternativa) }
-            .onSuccess { _porte.value = it }
+            .onSuccess {
+                _porte.value = it
+                _valorInformado.value = ValorInformado(
+                    valor,
+                    (if (usarAlternativa) a.unidadeAlternativa else a.unidade) ?: "",
+                    a.parametro
+                )
+            }
             .onFailure { _mensagem.value = it.message }
     }
 
     fun calcularPorteCategoria(rotulo: String) {
         val a = _atividade.value ?: return
         runCatching { Enquadramento.porteDe(a, rotulo) }
-            .onSuccess { _porte.value = it }
+            .onSuccess {
+                _porte.value = it
+                _valorInformado.value = ValorInformado(null, "", a.parametro, rotulo)
+            }
             .onFailure { _mensagem.value = it.message }
     }
 
+    /** Fatores da Tabela 5 sugeridos pela ultima consulta. Nao pesam, mas avisam. */
+    private var _fatoresAutomaticos: Set<String> = emptySet()
+
+    /**
+     * Tocar num criterio o torna do usuario, mesmo que tenha vindo da sugestao: quem
+     * desmarcou um criterio automatico nao quer ve-lo voltar sozinho na proxima consulta.
+     */
     fun alternarCriterio(id: String) {
         _marcados.value = _marcados.value.let { if (id in it) it - id else it + id }
+        _criteriosAutomaticos.value = _criteriosAutomaticos.value - id
     }
 
     fun alternarFator(id: String) {
@@ -112,8 +222,12 @@ class SimulacaoViewModel(app: Application) : AndroidViewModel(app) {
     fun definirEia(v: Boolean) { _comEia.value = v }
 
     /** Sugestão automática pelo pacote de camadas — o mesmo do aplicativo de campo. */
+    /** Coordenada da ultima consulta, para constar do PDF conforme o art. 6o, par. 5o. */
+    private var ultimaCoordenada: Pair<Double, Double>? = null
+
     fun detectarPorCoordenada(lat: Double, lon: Double) {
         val r = _regras.value ?: return
+        ultimaCoordenada = lat to lon
         viewModelScope.launch(Dispatchers.IO) {
             if (!arquivoPacote.exists()) {
                 _mensagem.value = "Pacote de camadas não instalado. Marque os critérios à mão."
@@ -123,17 +237,46 @@ class SimulacaoViewModel(app: Application) : AndroidViewModel(app) {
                 DeteccaoLocacional.abrir(arquivoPacote).use { it.verificar(r, lat, lon) }
             }.onSuccess { inc ->
                 _deteccao.value = inc
-                _marcados.value = _marcados.value + inc.criterios.map { it.id }
-                _fatoresMarcados.value = _fatoresMarcados.value + inc.fatores.map { it.id }
-                _mensagem.value = if (inc.criterios.isEmpty() && inc.fatores.isEmpty())
-                    "Nenhuma camada do pacote incide neste ponto. Confira também os critérios que dependem do projeto."
-                else "Sugestão aplicada: ${inc.criterios.size} critério(s) e ${inc.fatores.size} fator(es). Confira antes de seguir."
+                // Uma consulta nova SUBSTITUI a sugestao anterior em vez de somar a ela. O que
+                // o usuario marcou a mao continua marcado; so o que veio do app e refeito.
+                val novosCriterios = inc.criterios.map { it.id }.toSet()
+                val novosFatores = inc.fatores.map { it.id }.toSet()
+                _marcados.value = (_marcados.value - _criteriosAutomaticos.value) + novosCriterios
+                _fatoresMarcados.value =
+                    (_fatoresMarcados.value - _fatoresAutomaticos) + novosFatores
+                _criteriosAutomaticos.value = novosCriterios
+                _fatoresAutomaticos = novosFatores
+                // Tres situacoes que antes viravam duas frases. "Nada incide" e "nao consegui
+                // ler" nao podem soar igual: a segunda pede providencia.
+                _mensagem.value = buildString {
+                    if (inc.criterios.isEmpty() && inc.fatores.isEmpty()) {
+                        append("Nenhuma camada do pacote incide neste ponto. ")
+                        append("Confira também os critérios que dependem do projeto.")
+                    } else {
+                        append("Sugestão aplicada: ${inc.criterios.size} critério(s) e ")
+                        append("${inc.fatores.size} fator(es). Confira antes de seguir.")
+                    }
+                    if (inc.aConferir.isNotEmpty()) {
+                        append(" A CONFERIR à mão: ")
+                        append(inc.aConferir.joinToString(", ") { it.id })
+                        append(" — a geometria bate, mas o pacote não traz a categoria da UC.")
+                    }
+                    if (inc.camadasComFalha.isNotEmpty()) {
+                        append(" SEM LEITURA: ")
+                        append(inc.camadasComFalha.joinToString(", "))
+                        append(" — isso não é 'não incide'. Refaça o pacote de camadas.")
+                    }
+                }
             }.onFailure { _mensagem.value = "Consulta de camadas falhou: ${it.message}" }
         }
     }
 
     fun calcular() {
-        val r = _regras.value ?: return
+        val r = _regras.value ?: run {
+            // Retorno mudo: o usuario tocava em "Calcular" e nada acontecia, sem explicacao.
+            _mensagem.value = "Base normativa ainda não carregada. Aguarde um instante."
+            return
+        }
         val porte = _porte.value ?: run { _mensagem.value = "Informe o porte."; return }
         val incidentes = r.criterios.filter { it.id in _marcados.value }
         val fatores = r.fatores.filter { it.id in _fatoresMarcados.value }
@@ -154,9 +297,33 @@ class SimulacaoViewModel(app: Application) : AndroidViewModel(app) {
             )
         } else escolhida
 
-        runCatching { Enquadramento.simular(r, a, porte, incidentes, fatores, _comEia.value) }
+        runCatching {
+            Enquadramento.simular(
+                r, a, porte, incidentes, fatores, _comEia.value,
+                valorInformado = _valorInformado.value,
+                coordenadaConsultada = ultimaCoordenada,
+                versaoPacote = _deteccao.value?.versaoPacote,
+                criteriosAutomaticos = _criteriosAutomaticos.value
+            )
+        }
             .onSuccess { _resultado.value = it }
             .onFailure { _mensagem.value = it.message }
+    }
+
+    /**
+     * `calcular()` que devolve se deu certo, para a tela nao navegar em cima de falha.
+     *
+     * BUG corrigido: o botao fazia `vm.calcular(); avancar()` — incondicional. `calcular()` tem
+     * quatro saidas sem sucesso, uma delas completamente muda (regras nulas), e `_resultado` so
+     * e sobrescrito no sucesso. Falhando, a tela de resultado exibia A SIMULACAO ANTERIOR com
+     * cara de resultado novo, enquanto a mensagem de erro passava por cinco segundos na barra
+     * de baixo. Documento assinavel com o numero errado.
+     */
+    fun calcularComRetorno(): Boolean {
+        val antes = _resultado.value
+        calcular()
+        val depois = _resultado.value
+        return depois != null && depois !== antes
     }
 
     /**
