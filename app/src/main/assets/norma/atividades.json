@@ -1636,10 +1636,14 @@
       "unidade": "ha",
       "limiteP": 2.0,
       "limiteM": 5.0,
-      "conferencia": "divergente",
+      "conferencia": "oficial",
       "limitePExclusivo": true,
       "limiteMExclusivo": true,
-      "nota": "ATENÇÃO — lacuna na redação da norma: o texto diz \"Área útil < 2 ha : Pequeno\" e \"2 ha < Área Útil < 5 ha : Médio\". Um valor de exatamente 2 ha não cai em nenhuma das duas faixas. Confira o caso concreto com a unidade regional."
+      "nota": "ATENÇÃO — lacuna de redação da própria DN 217. As três faixas desta atividade foram escritas com desigualdade estrita: \"Área útil < 2 ha : Pequeno\", \"2 ha < Área Útil < 5 ha : Médio\", \"Área útil > 5 ha : Grande\". Exatamente 2 ha e exatamente 5 ha não pertencem a faixa nenhuma. A atividade imediatamente anterior no texto oficial fecha suas faixas corretamente (\"90.000 ≤ Capacidade ≤ 150.000\"), então isto é falha pontual, não convenção. Neste aplicativo esses dois valores param a simulação e mostram as duas leituras, em vez de escolher um lado em silêncio.",
+      "valoresSemFaixa": [
+        2.0,
+        5.0
+      ]
     },
     {
       "codigo": "C-05-01-0",
