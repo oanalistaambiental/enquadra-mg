@@ -1,6 +1,6 @@
 {
-  "titulo": "Restrições ao LAS/Cadastro — Art. 19 e Art. 20 da DN COPAM 217/2017",
-  "base_legal": "DN COPAM 217/2017, arts. 19, 20 e 21, com as alterações das DN 240/2021 e 246/2022",
+  "titulo": "Regras por atividade fora da Tabela 3 — arts. 18, 19, 20 e 21 da DN COPAM 217/2017",
+  "base_legal": "DN COPAM 217/2017, arts. 18, 19, 20 e 21, com as alterações das DN 240/2021 e 246/2022",
   "fonte": "https://www.siam.mg.gov.br/sla/download.pdf?idNorma=45558",
   "extraido_em": "2026-09-07",
   "conferencia": "oficial",
@@ -125,8 +125,58 @@
     ]
   },
   "art21": {
-    "texto": "Art. 21 — A pesquisa mineral que envolva o emprego de Guia de Utilização deverá ser licenciada conforme porte, potencial poluidor e critérios locacionais da Tabela 3.",
-    "dispensa": "§1º — A pesquisa mineral NÃO está sujeita ao licenciamento quando não envolver Guia de Utilização nem implicar supressão de vegetação de Mata Atlântica em estágio médio ou avançado de regeneração.",
-    "ressalva": "§2º — A dispensa não exime o empreendedor de regularizar intervenções ambientais e uso de recursos hídricos, nem de executar o PRAD, conforme o caso."
+    "texto": "Art. 21 – A pesquisa mineral que envolva o emprego de Guia de Utilização deverá ser licenciada de acordo com as características de porte e potencial poluidor/degradador da atividade minerária e critérios de localização constantes na Tabela 3 nesta Deliberação Normativa.",
+    "dispensa": "§1º – A pesquisa mineral não está sujeita aos procedimentos de licenciamento ambiental quando não envolver o emprego de Guia de Utilização expedida pela entidade responsável pela sua concessão ou não implicar em supressão de vegetação do bioma Mata Atlântica nos estágios sucessionais médio e avançado de regeneração.",
+    "ressalva": "§2º – A pesquisa mineral a que se refere o parágrafo anterior não exime o empreendedor de regularizar eventuais intervenções ambientais e uso de recursos hídricos ou executar o Plano de Recuperação de Área Degradada – PRAD, conforme o caso.",
+    "nota_art22": "O art. 22, que mandava licenciar por LAC-1 no código A-07-01-1 a pesquisa mineral com supressão de Mata Atlântica em estágio médio ou avançado, foi REVOGADO pelo art. 5º da DN COPAM 246/2022. Por isso o código A-07-01-1 não consta do catálogo deste aplicativo."
+  },
+  "art18": {
+    "explicacao": "O art. 18 traz quatro situações em que a modalidade da Tabela 3 NÃO é a palavra final. Nenhuma delas pode ser decidida pelo aplicativo, porque todas dependem de fatos do empreendimento que só o empreendedor conhece (se é ampliação, se é repotenciação, se a quantidade transportada é limitada). Por isso o aplicativo AVISA e não troca a modalidade sozinho: um aviso que o usuário confere vale mais que um resultado trocado em silêncio.",
+    "casos": [
+      {
+        "codigo": "F-02-01-1",
+        "nome": "Transporte rodoviário de produtos e resíduos perigosos",
+        "referencia": "art. 18, §1º",
+        "condicao": "Sempre que o resultado for LAS/Cadastro.",
+        "efeito": "EXIGENCIA_ADICIONAL",
+        "resumo": "O cadastro desta atividade exige a apresentação do Plano de Emergência Ambiental – PEA.",
+        "texto": "§1° – Para o cadastro da atividade código F-02-01-1 – Transporte rodoviário de produtos e resíduos perigosos, será exigida a apresentação do Plano de Emergência Ambiental – PEA; ficando o transporte de produtos e resíduos perigosos em quantidades limitadas, conforme Resolução ANTT, dispensado de licenciamento ambiental.",
+        "segunda_hipotese": "Se o transporte se der em QUANTIDADES LIMITADAS na forma da Resolução ANTT, o mesmo §1º o dispensa de licenciamento ambiental. Confira a quantidade antes de formalizar: a dispensa não vem do porte, vem da quantidade transportada."
+      },
+      {
+        "codigo": "E-01-09-0",
+        "nome": "Aeroportos",
+        "referencia": "art. 18, §2º",
+        "condicao": "Ampliação de aeroporto regional JÁ REGULARIZADO, circunscrita aos limites do sítio aeroportuário, considerada de baixo potencial de impacto nos termos da Resolução Conama 470/2015.",
+        "efeito": "MODALIDADE_ALTERNATIVA",
+        "modalidade": "LAS/RAS",
+        "resumo": "Preenchidas as três condições, a regularização ocorre por LAS/RAS, qualquer que seja a classe da Tabela 3.",
+        "texto": "§2º – Para a atividade E-01-09-0 – Aeroportos, nos casos em que a ampliação de aeroportos regionais regularizados esteja circunscrita aos limites do sítio aeroportuário e seja considerada de baixo potencial de impacto ambiental, nos termos da Resolução Conama 470, de 28 de agosto de 2015, a regularização ambiental deverá ocorrer por meio de LAS/RAS."
+      },
+      {
+        "codigo": "E-02-01-1",
+        "nome": "Pequenas Centrais Hidrelétricas – PCH",
+        "referencia": "art. 18, §3º (redação da DN COPAM 240/2021)",
+        "condicao": "RECAPACITAÇÃO ou REPOTENCIAÇÃO que satisfaça, cumulativamente: I – nenhuma modificação na área do reservatório, no nível mínimo normal de montante e no trecho de vazão reduzida (TVR); II – nenhuma alteração na vazão residual outorgada para o TVR; III – capacidade instalada final não superior a 30 MW.",
+        "efeito": "MODALIDADE_ALTERNATIVA",
+        "modalidade": "LAS/Cadastro",
+        "resumo": "Satisfeitas as três condições, pode ser licenciada por LAS Cadastro.",
+        "texto": "§3° – A recapacitação ou a repotenciação de Pequenas Centrais Hidrelétricas – PCHs, atividade código E-02-01-1, ou de Centrais Geradoras Hidrelétricas – CGHs, atividade código E-02-01-2, poderá ser licenciada por meio LAS Cadastro, desde que sejam satisfeitas as três condições a seguir, de forma a assegurar a não incidência de novos impactos ambientais em relação àqueles já consolidados. (Redação dada pela Deliberação Normativa Copam nº 240, de 29 de janeiro de 2021)",
+        "armadilha": "O texto consolidado da DN 217 publicado pelo SIAM traz DOIS §3º seguidos: o vigente, dado pela DN 240/2021 (LAS Cadastro, PCH e CGH, 30 MW e 5 MW), e logo abaixo a redação ORIGINAL revogada (LAS/RAS, só PCH). Quem lê o último parágrafo da tela, ou quem extrai por script pegando a última ocorrência, aplica a regra revogada. Vale a primeira, que é a que traz a nota de redação.",
+        "condicao_extra": "§5º – Se a recapacitação ou repotenciação demandar alteração da vazão turbinada, a retificação da portaria de outorga de direito de uso de recursos hídricos deve ser feita PREVIAMENTE."
+      },
+      {
+        "codigo": "E-02-01-2",
+        "nome": "Centrais Geradoras Hidrelétricas – CGH",
+        "referencia": "art. 18, §3º (redação da DN COPAM 240/2021)",
+        "condicao": "RECAPACITAÇÃO ou REPOTENCIAÇÃO que satisfaça, cumulativamente: I – nenhuma modificação na área do reservatório, no nível mínimo normal de montante e no TVR; II – nenhuma alteração na vazão residual outorgada para o TVR; III – capacidade instalada final não superior a 5 MW.",
+        "efeito": "MODALIDADE_ALTERNATIVA",
+        "modalidade": "LAS/Cadastro",
+        "resumo": "Satisfeitas as três condições, pode ser licenciada por LAS Cadastro.",
+        "texto": "§3° – ... ou de Centrais Geradoras Hidrelétricas – CGHs, atividade código E-02-01-2, poderá ser licenciada por meio LAS Cadastro ... III – que a capacidade instalada após a recapacitação ou repotenciação não ultrapasse ... 5 MW (cinco megawatts) em caso de CGH código E-02-01-2. (Redação dada pela Deliberação Normativa Copam nº 240, de 29 de janeiro de 2021)",
+        "condicao_extra": "§5º – Se a recapacitação ou repotenciação demandar alteração da vazão turbinada, a retificação da portaria de outorga deve ser feita PREVIAMENTE."
+      }
+    ],
+    "nota_projetos": "§4º – Quando necessários projetos dos sistemas de controle ambiental, esses deverão estar disponíveis no empreendimento para consulta pelo órgão ambiental estadual."
   }
 }
