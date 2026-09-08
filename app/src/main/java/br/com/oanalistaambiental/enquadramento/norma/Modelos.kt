@@ -4,11 +4,23 @@ enum class Grau { P, M, G;
     val extenso: String get() = when (this) { P -> "pequeno"; M -> "médio"; G -> "grande" }
 }
 
-enum class Conferencia { CRUZADO, UNICO, DIVERGENTE;
+/**
+ * De onde veio o dado desta atividade, e quanto se pode confiar nele.
+ *
+ * OFICIAL é o nível mais alto e passou a ser o normal: em 07/09/2026 a listagem inteira foi
+ * extraída campo a campo do texto oficial consolidado da DN 217 (com as alterações até a
+ * DN 246/2022), publicado pelo SIAM. Os níveis antigos continuam existindo porque descrevem
+ * como os primeiros dados foram levantados, antes de haver o texto oficial em mãos.
+ *
+ * DIVERGENTE mudou de sentido junto: hoje marca a atividade cuja REDAÇÃO DA PRÓPRIA NORMA tem
+ * lacuna, sobreposição ou piso — casos em que não existe resposta certa a dar, só o aviso.
+ */
+enum class Conferencia { OFICIAL, CRUZADO, UNICO, DIVERGENTE;
     val aviso: String? get() = when (this) {
+        OFICIAL -> null
         CRUZADO -> null
         UNICO -> "Este dado foi lido de uma única cópia da norma. Confira antes de usar em processo."
-        DIVERGENTE -> "As cópias consultadas discordaram em algum campo desta atividade. Veja a nota."
+        DIVERGENTE -> "A redação da norma para esta atividade tem lacuna, sobreposição ou piso. Veja a nota."
     }
 }
 
@@ -25,15 +37,30 @@ data class Atividade(
     val unidade: String? = null,
     val limiteP: Double? = null,
     val limiteM: Double? = null,
-    /** Em A-03-01-8 a faixa pequena é estritamente menor que o limite, não menor ou igual. */
-    val limitePExclusivo: Boolean = false,
     /**
-     * Mesma ideia para o limite da faixa média. Existe porque algumas atividades da DN escrevem
-     * a faixa como "de X a menos de Y" — e nesse caso Y exatos já é porte grande. Nenhuma
-     * atividade carregada usa isto hoje; o campo existe para que a norma possa ser expressa sem
-     * mudar o motor quando a redação exigir.
+     * A faixa Pequeno é estritamente menor que o limite, e não menor ou igual.
+     *
+     * NÃO É EXCEÇÃO — É A MAIORIA. A DN 217 não usa convenção única: em 185 das 226 atividades
+     * numéricas a faixa Pequeno é escrita com "<" (o valor exatamente igual ao limite já é
+     * MÉDIO) e nas outras 41 com "≤" (o valor igual ainda é PEQUENO). Assumir um padrão erra em
+     * um dos dois grupos, e errar para baixo subestima a modalidade de licenciamento. Por isso
+     * cada atividade traz este campo lido individualmente do texto oficial.
      */
+    val limitePExclusivo: Boolean = false,
+    /** Mesma ideia para o teto da faixa Média: com "<", o valor igual ao limite já é GRANDE. */
     val limiteMExclusivo: Boolean = false,
+    /**
+     * Piso da faixa Pequeno, quando a norma escreve a faixa com limite inferior — por exemplo
+     * "2.400 t/ano < Matéria Prima Processada < 12.000 t/ano : Pequeno".
+     *
+     * Abaixo do piso a listagem NÃO PREVÊ FAIXA. Isso costuma significar que naquela escala a
+     * atividade não é passível de licenciamento estadual, mas quem afirma isso é o órgão, não
+     * este app: o motor devolve "abaixo da faixa prevista" e a tela manda conferir. Devolver
+     * PEQUENO seria inventar um enquadramento que a norma não deu. 74 atividades têm piso.
+     */
+    val pisoFaixa: Double? = null,
+    /** true quando o piso é escrito com "<" (o valor igual ao piso já está dentro da faixa). */
+    val pisoExclusivo: Boolean = false,
     val unidadeAlternativa: String? = null,
     val limitePAlt: Double? = null,
     val limiteMAlt: Double? = null,
@@ -99,6 +126,49 @@ data class Modalidade(
     val audienciaTexto: String? = null
 )
 
+/**
+ * Restrições ao LAS/Cadastro dos arts. 19 e 20 da DN 217.
+ *
+ * A Tabela 3 pode indicar Cadastro para as classes 1 e 2, mas estes dois artigos proíbem essa
+ * modalidade para uma lista fechada de atividades — e o app precisa aplicá-los DEPOIS de
+ * consultar a tabela. Sem isso, sai Cadastro onde a norma exige RAS: erro na direção perigosa,
+ * porque reduz a exigência de licenciamento.
+ */
+data class RestricoesCadastro(
+    /** Códigos do art. 19: nunca Cadastro nas classes 1 e 2. */
+    val art19: Map<String, ItemRestricao>,
+    /** Códigos do parágrafo único do art. 20: a Listagem A é proibida, MENOS estes cinco. */
+    val art20Excecoes: Map<String, ItemRestricao>,
+    val modalidadeSubstituta: String,
+    val classesAtingidas: Set<Int>
+) {
+    /**
+     * A modalidade Cadastro é proibida para esta atividade nesta classe?
+     *
+     * Duas regras, de sentidos opostos. O art. 19 é uma LISTA DO QUE É PROIBIDO. O art. 20 é
+     * uma proibição de toda a Listagem A com uma lista do que é PERMITIDO — inverter os dois
+     * por descuido derruba metade das atividades minerárias para o lado errado.
+     */
+    fun cadastroProibido(codigo: String, classe: Int): Motivo? {
+        if (classe !in classesAtingidas) return null
+        art19[codigo]?.let { return Motivo(19, it, "art. 19, ${it.referencia}") }
+        if (codigo.startsWith("A-") && codigo !in art20Excecoes) {
+            return Motivo(20, null, "art. 20, caput — atividade minerária sem exceção no parágrafo único")
+        }
+        return null
+    }
+
+    data class Motivo(val artigo: Int, val item: ItemRestricao?, val referencia: String)
+}
+
+data class ItemRestricao(
+    val codigo: String,
+    /** Alínea (art. 19) ou inciso (art. 20) onde o código aparece. */
+    val referencia: String,
+    val nome: String,
+    val nota: String? = null
+)
+
 data class RegrasGerais(
     val prazoAnaliseDias: Int,
     val prazoAnaliseTexto: String,
@@ -119,6 +189,7 @@ data class Regras(
     val modalidades: List<Modalidade>,
     val gerais: RegrasGerais,
     val atividades: List<Atividade>,
+    val restricoesCadastro: RestricoesCadastro,
     val procedencia: Map<String, String> = emptyMap()
 ) {
     fun modalidade(sigla: String): Modalidade? = modalidades.firstOrNull { it.sigla == sigla }

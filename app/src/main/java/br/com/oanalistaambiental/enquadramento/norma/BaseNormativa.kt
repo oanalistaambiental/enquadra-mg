@@ -20,6 +20,7 @@ object BaseNormativa {
         val mods = JSONObject(ler("modalidades.json"))
         val ativ = JSONObject(ler("atividades.json"))
         val proc = JSONObject(ler("procedencia.json"))
+        val rest = JSONObject(ler("restricoes-cadastro.json"))
 
         val tabela1 = t1.getJSONObject("combinacoes").let { o ->
             o.keys().asSequence().associateWith { Grau.valueOf(o.getString(it)) }
@@ -122,6 +123,8 @@ object BaseNormativa {
                     limiteM = if (a.has("limiteM")) a.getDouble("limiteM") else null,
                     limitePExclusivo = a.optBoolean("limitePExclusivo", false),
                     limiteMExclusivo = a.optBoolean("limiteMExclusivo", false),
+                    pisoFaixa = if (a.isNull("pisoFaixa")) null else a.optDouble("pisoFaixa"),
+                    pisoExclusivo = a.optBoolean("pisoExclusivo", false),
                     unidadeAlternativa = a.optString("unidadeAlternativa", "").ifBlank { null },
                     limitePAlt = if (a.has("limitePAlt")) a.getDouble("limitePAlt") else null,
                     limiteMAlt = if (a.has("limiteMAlt")) a.getDouble("limiteMAlt") else null,
@@ -137,13 +140,41 @@ object BaseNormativa {
             }
         }
 
+        // Arts. 19 e 20 — restrições ao LAS/Cadastro. Aplicadas DEPOIS da Tabela 3.
+        fun itens(arr: org.json.JSONArray?, campoRef: String): Map<String, ItemRestricao> {
+            if (arr == null) return emptyMap()
+            return (0 until arr.length()).associate { i ->
+                val o = arr.getJSONObject(i)
+                val c = o.getString("codigo")
+                c to ItemRestricao(
+                    codigo = c,
+                    referencia = o.optString(campoRef),
+                    nome = o.optString("nome"),
+                    nota = o.optString("nota").ifBlank { null }
+                )
+            }
+        }
+        val a19 = rest.getJSONObject("art19")
+        val a20 = rest.getJSONObject("art20")
+        val classes = a19.optJSONArray("aplica_a_classes")?.let { arr ->
+            (0 until arr.length()).map { arr.getInt(it) }.toSet()
+        } ?: setOf(1, 2)
+        val restricoes = RestricoesCadastro(
+            art19 = itens(a19.optJSONArray("codigos"), "alinea"),
+            art20Excecoes = itens(a20.optJSONArray("excecoes"), "inciso"),
+            modalidadeSubstituta = rest.optString("modalidade_substituta", "RAS"),
+            classesAtingidas = classes
+        )
+
         val procedencia = mapOf(
             "norma" to proc.getString("norma"),
             "extraido_em" to proc.getString("extraido_em"),
             "aviso" to proc.getString("aviso"),
+            "fonte_oficial" to proc.optString("fonte_oficial"),
             "cobertura" to ativ.getString("cobertura")
         )
 
-        return Regras(tabela1, tabela2, tabela3, criterios, fatores, modalidades, gerais, atividades, procedencia)
+        return Regras(tabela1, tabela2, tabela3, criterios, fatores, modalidades, gerais,
+            atividades, restricoes, procedencia)
     }
 }

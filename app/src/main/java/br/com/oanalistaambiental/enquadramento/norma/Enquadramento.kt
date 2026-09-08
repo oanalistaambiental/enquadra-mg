@@ -40,16 +40,51 @@ object Enquadramento {
         /** Versao do pacote de camadas que sustentou a sugestao automatica. */
         val versaoPacote: String? = null,
         /** Ids dos criterios que vieram da sugestao automatica, e nao da mao de quem assina. */
-        val criteriosAutomaticos: Set<String> = emptySet()
+        val criteriosAutomaticos: Set<String> = emptySet(),
+        /** Código da atividade, para o link da consulta pública de decisões. */
+        val codigoAtividade: String? = null,
+        /** O que a Tabela 3 tinha indicado, quando o art. 19 ou 20 substituiu a modalidade. */
+        val modalidadeDaTabela3: String? = null,
+        /** A referência do artigo que proibiu o Cadastro, quando houve. */
+        val restricaoCadastro: String? = null
     )
 
     class DadoFaltante(mensagem: String) : Exception(mensagem)
 
+    /**
+     * O valor informado está ABAIXO do menor porte previsto para a atividade.
+     *
+     * ISTO NÃO É ERRO — É RESULTADO, e a norma o prevê expressamente. A DN 217 escreve 74
+     * atividades com faixa inferior explícita ("2.400 t/ano < Matéria Prima Processada <
+     * 12.000 t/ano : Pequeno"); abaixo desse piso o empreendimento não se enquadra em nenhuma
+     * das classes, e o art. 10 diz o que acontece: fica DISPENSADO do licenciamento ambiental
+     * estadual — sem ficar dispensado dos controles nem das demais autorizações.
+     *
+     * Uma versão anterior deste app tratava o caso como exceção, dizendo que não sabia
+     * responder. Sabia: bastava ler o art. 10. Ver `Dispensa.kt`, que monta o resultado com os
+     * três deveres do parágrafo único sempre ao lado da palavra "dispensado".
+     */
+    class PorteInferior(
+        val atividade: Atividade,
+        val valor: Double,
+        val piso: Double,
+        val unidade: String
+    ) : Exception(
+        "Porte inferior: ${Numeros.porExtenso(valor)} $unidade fica abaixo do menor porte " +
+            "previsto para ${atividade.codigo}, que começa em ${Numeros.porExtenso(piso)} " +
+            "$unidade. Dispensado de licenciamento estadual pelo art. 10 da DN 217."
+    )
+
     // ------------------------------------------------------------------ porte
 
     /**
-     * Porte a partir do valor do parâmetro. A comparação segue a norma ao pé da letra:
-     * a faixa pequena vai até o limite INCLUSIVE, salvo quando a atividade diz o contrário.
+     * Porte a partir do valor do parâmetro, seguindo a redação da atividade ao pé da letra.
+     *
+     * Os três operadores vêm do texto oficial, atividade por atividade — não há convenção única
+     * na DN 217. Ver a documentação de `limitePExclusivo` e `pisoFaixa` em Modelos.kt.
+     *
+     * @throws PorteInferior quando o valor fica abaixo do menor porte previsto — que não é
+     *   erro, e sim a hipótese de dispensa do art. 10. Ver `Dispensa.kt`.
      */
     fun porteDe(atividade: Atividade, valor: Double, usarAlternativa: Boolean = false): Grau {
         if (atividade.tipo != "numerico") {
@@ -59,6 +94,14 @@ object Enquadramento {
             ?: throw DadoFaltante("Faixa de porte não carregada para ${atividade.codigo}.")
         val limiteM = (if (usarAlternativa) atividade.limiteMAlt else atividade.limiteM)
             ?: throw DadoFaltante("Faixa de porte não carregada para ${atividade.codigo}.")
+
+        // O piso só vale para a unidade principal: a norma não repete faixa inferior na
+        // unidade alternativa, e supor uma equivalente seria inventar número.
+        val piso = atividade.pisoFaixa
+        if (!usarAlternativa && piso != null) {
+            val dentro = if (atividade.pisoExclusivo) valor > piso else valor >= piso
+            if (!dentro) throw PorteInferior(atividade, valor, piso, atividade.unidade ?: "")
+        }
 
         val pequeno = if (atividade.limitePExclusivo) valor < limiteP else valor <= limiteP
         val medio = if (atividade.limiteMExclusivo) valor < limiteM else valor <= limiteM
@@ -116,6 +159,45 @@ object Enquadramento {
             ?: throw DadoFaltante("Modalidade \"$sigla\" não descrita na base.")
     }
 
+    /** O que a Tabela 3 deu, e o que os arts. 19 e 20 fizeram com aquilo. */
+    data class ModalidadeAplicada(
+        val modalidade: Modalidade,
+        /** A modalidade que a Tabela 3 tinha indicado, quando foi substituída. */
+        val substituiu: Modalidade?,
+        val motivo: RestricoesCadastro.Motivo?
+    )
+
+    /**
+     * Modalidade da Tabela 3, COM as restrições dos arts. 19 e 20 aplicadas depois.
+     *
+     * A Tabela 3 indica LAS/Cadastro para várias combinações de classe 1 e 2, mas os arts. 19 e
+     * 20 proíbem essa modalidade para uma lista fechada de atividades — 14 códigos nominais mais
+     * TODA a Listagem A, salvo cinco exceções. Nesses casos a modalidade sobe para LAS/RAS.
+     *
+     * O app rodou sem estes dois artigos até 07/09/2026 e devolvia Cadastro onde a norma exige
+     * RAS. É erro na direção perigosa: reduz a exigência, e quem seguisse o resultado
+     * protocolaria a modalidade errada.
+     */
+    fun modalidadeAplicada(
+        regras: Regras,
+        atividade: Atividade,
+        classe: Int,
+        fatorLocacional: Int
+    ): ModalidadeAplicada {
+        val daTabela = modalidadeDe(regras, classe, fatorLocacional)
+        if (!daTabela.sigla.contains("CADASTRO", ignoreCase = true)) {
+            return ModalidadeAplicada(daTabela, null, null)
+        }
+        val motivo = regras.restricoesCadastro.cadastroProibido(atividade.codigo, classe)
+            ?: return ModalidadeAplicada(daTabela, null, null)
+        val substituta = regras.modalidade(regras.restricoesCadastro.modalidadeSubstituta)
+            ?: throw DadoFaltante(
+                "A modalidade substituta \"${regras.restricoesCadastro.modalidadeSubstituta}\" " +
+                    "não está descrita na base."
+            )
+        return ModalidadeAplicada(substituta, daTabela, motivo)
+    }
+
     // ------------------------------------------------------------------ simulação
 
     fun simular(
@@ -134,7 +216,10 @@ object Enquadramento {
         val classe = classeDe(regras, porte, ppGeral)
         val fator = fatorLocacional(criteriosIncidentes)
         val determinante = criterioDeterminante(criteriosIncidentes)
-        val modalidade = modalidadeDe(regras, classe, fator)
+        // Tabela 3 primeiro, arts. 19 e 20 depois. A ordem importa: os artigos SUBSTITUEM o
+        // que a tabela indicou, e o resultado precisa registrar as duas coisas.
+        val aplicada = modalidadeAplicada(regras, atividade, classe, fator)
+        val modalidade = aplicada.modalidade
 
         // Nao se infere EIA a partir da modalidade: o trifasico so exige EIA quando ha
         // significativo impacto. Quem sabe disso e quem esta simulando, entao o prazo dobrado
@@ -160,8 +245,17 @@ object Enquadramento {
                 if (criteriosIncidentes.size > 1)
                     "DN 217/2017, art. 6º, §3º — incidindo mais de um critério, prevalece o de maior peso"
                 else "DN 217/2017, art. 6º, §1º e §2º, e Tabela 4"))
-            add(Passo("Modalidade", modalidade.sigla,
-                "DN 217/2017, art. 6º e Tabela 3 — classe $classe × fator $fator"))
+            if (aplicada.substituiu == null) {
+                add(Passo("Modalidade", modalidade.sigla,
+                    "DN 217/2017, art. 6º e Tabela 3 — classe $classe × fator $fator"))
+            } else {
+                add(Passo("Modalidade pela Tabela 3", aplicada.substituiu.sigla,
+                    "DN 217/2017, art. 6º e Tabela 3 — classe $classe × fator $fator"))
+                add(Passo("Modalidade aplicada", modalidade.sigla,
+                    "DN 217/2017, ${aplicada.motivo?.referencia} — não se admite LAS/Cadastro " +
+                        "para esta atividade na classe $classe" +
+                        (aplicada.motivo?.item?.nota?.let { " ($it)" } ?: "")))
+            }
             add(Passo("Prazo de análise", "$prazoDias dias", prazoTexto))
             // No trifásico a LP vale 5 anos e a LI 6. Dizer "10 anos" aqui seria falso — e este
             // passo vai inteiro para o PDF, que pode ser anexado a um parecer.
@@ -181,6 +275,15 @@ object Enquadramento {
         val avisos = buildList {
             atividade.conferencia.aviso?.let { add(it) }
             atividade.nota?.let { add(it) }
+            // O aviso mais consequente da lista: a Tabela 3 dizia Cadastro e a norma nao deixa.
+            aplicada.substituiu?.let { antes ->
+                add(
+                    "A Tabela 3 indicaria ${antes.sigla} para classe $classe com fator $fator, mas a " +
+                        "DN 217 não admite LAS/Cadastro para esta atividade nessa classe " +
+                        "(${aplicada.motivo?.referencia}). A modalidade sobe para ${modalidade.sigla}." +
+                        (aplicada.motivo?.item?.nota?.let { " $it" } ?: "")
+                )
+            }
             if (criteriosIncidentes.size > 1) add(
                 "Incidiram ${criteriosIncidentes.size} critérios locacionais. Os pesos não se somam: " +
                     "prevaleceu o de maior peso (art. 6º, §3º)."
@@ -208,7 +311,10 @@ object Enquadramento {
             valorInformado = valorInformado,
             coordenadaConsultada = coordenadaConsultada,
             versaoPacote = versaoPacote,
-            criteriosAutomaticos = criteriosAutomaticos
+            criteriosAutomaticos = criteriosAutomaticos,
+            codigoAtividade = atividade.codigo,
+            modalidadeDaTabela3 = aplicada.substituiu?.sigla,
+            restricaoCadastro = aplicada.motivo?.referencia
         )
     }
 }
