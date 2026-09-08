@@ -124,6 +124,9 @@ object BaseNormativa {
                     limitePExclusivo = a.optBoolean("limitePExclusivo", false),
                     limiteMExclusivo = a.optBoolean("limiteMExclusivo", false),
                     pisoFaixa = if (a.isNull("pisoFaixa")) null else a.optDouble("pisoFaixa"),
+                    valoresSemFaixa = a.optJSONArray("valoresSemFaixa")?.let { arr ->
+                        (0 until arr.length()).map { arr.getDouble(it) }
+                    } ?: emptyList(),
                     pisoExclusivo = a.optBoolean("pisoExclusivo", false),
                     unidadeAlternativa = a.optString("unidadeAlternativa", "").ifBlank { null },
                     limitePAlt = if (a.has("limitePAlt")) a.getDouble("limitePAlt") else null,

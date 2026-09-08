@@ -50,6 +50,21 @@ data class Atividade(
     /** Mesma ideia para o teto da faixa Média: com "<", o valor igual ao limite já é GRANDE. */
     val limiteMExclusivo: Boolean = false,
     /**
+     * Valores em que a NORMA NÃO DEFINE faixa nenhuma. Lacuna de redação, não erro de leitura.
+     *
+     * O caso conhecido é C-04-21-9, cujas três faixas foram escritas todas com desigualdade
+     * estrita: "Área útil < 2 ha : Pequeno", "2 ha < Área Útil < 5 ha : Médio",
+     * "Área útil > 5 ha : Grande". Exatamente 2 ha e exatamente 5 ha não caem em faixa
+     * alguma. Compare com a atividade imediatamente anterior no texto oficial, cujas faixas
+     * fecham corretamente ("90.000 ≤ Capacidade ≤ 150.000"): não é convenção, é falha
+     * pontual de redação.
+     *
+     * O aplicativo NÃO escolhe um lado em silêncio. Escolher Médio subestima a modalidade;
+     * escolher Grande a superestima; e as duas leituras são defensáveis a partir do texto.
+     * Nesses valores a simulação para e mostra as duas leituras, para quem assina decidir.
+     */
+    val valoresSemFaixa: List<Double> = emptyList(),
+    /**
      * Piso da faixa Pequeno, quando a norma escreve a faixa com limite inferior — por exemplo
      * "2.400 t/ano < Matéria Prima Processada < 12.000 t/ano : Pequeno".
      *

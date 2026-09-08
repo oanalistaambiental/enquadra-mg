@@ -56,4 +56,17 @@ object Decisoes {
             "critério locacional apareceu. O padrão recorrente é o que serve de referência — " +
             "um processo isolado não é padrão, e o enquadramento de um empreendimento não " +
             "vincula o do outro."
+
+    /**
+     * Armadilha real, e das que passam despercebidas: a consulta pública devolve decisões de
+     * antes de 2017, proferidas sob a DN COPAM 74/2004, hoje revogada. A classe citada num
+     * parecer daqueles NÃO é comparável com a que este aplicativo calcula — as tabelas
+     * mudaram. Quem usa um parecer antigo como referência numérica conclui que a ferramenta
+     * está errada, ou pior, instrui o processo pela tabela revogada.
+     */
+    const val CUIDADO_NORMA_ANTIGA =
+        "Confira a DATA e a norma citada no próprio parecer antes de usá-lo como referência. " +
+            "Decisões anteriores a 2017 foram enquadradas pela DN COPAM 74/2004, revogada pela " +
+            "DN 217/2017: a classe que elas citam vem de outra tabela e não bate com o cálculo " +
+            "desta simulação. Para conferir número, use só decisões já sob a DN 217."
 }

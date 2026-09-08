@@ -60,6 +60,59 @@ object Enquadramento {
     class DadoFaltante(mensagem: String) : Exception(mensagem)
 
     /**
+     * O valor informado cai numa LACUNA DA NORMA: nenhuma faixa de porte o cobre.
+     *
+     * ISTO NÃO É ERRO DO APLICATIVO NEM DO USUÁRIO — é falha de redação da própria DN 217.
+     * Em C-04-21-9 as três faixas foram escritas com desigualdade estrita ("< 2 ha : Pequeno",
+     * "2 ha < Área Útil < 5 ha : Médio", "> 5 ha : Grande"), de modo que exatamente 2 ha e
+     * exatamente 5 ha não pertencem a faixa nenhuma.
+     *
+     * O aplicativo podia calar e escolher um lado. Não escolhe: subestimar o porte reduz a
+     * modalidade de licenciamento — o erro perigoso —, e superestimar faz o empreendedor
+     * instruir processo mais pesado do que a norma exige. As duas leituras são defensáveis, e
+     * quem decide entre elas é a Unidade Regional, não uma ferramenta independente.
+     */
+    class LacunaDeFaixa(
+        val atividade: Atividade,
+        val valor: Double,
+        val unidade: String,
+        val limiteP: Double,
+        val limiteM: Double
+    ) : Exception(
+        "A DN 217 não define faixa de porte para ${atividade.parametro} igual a $valor $unidade " +
+            "em ${atividade.codigo}."
+    ) {
+        /** "Área útil de 5 ha", para a frase da tela. */
+        fun parametroFormatado(): String {
+            val n = if (valor % 1.0 == 0.0) valor.toLong().toString() else valor.toString()
+            return "${atividade.parametro} de $n $unidade".trim()
+        }
+
+        /** As duas leituras possíveis, na ordem em que devem ser apresentadas. */
+        fun leituras(): List<Leitura> = when {
+            kotlin.math.abs(valor - limiteP) < 1e-9 -> listOf(
+                Leitura(Grau.P, "lendo o limite de Pequeno como \"≤ $limiteP $unidade\""),
+                Leitura(Grau.M, "lendo a faixa Média como começando em $limiteP $unidade")
+            )
+            else -> listOf(
+                Leitura(Grau.M, "lendo o teto da faixa Média como \"≤ $limiteM $unidade\""),
+                Leitura(Grau.G, "lendo a faixa Grande como começando em $limiteM $unidade")
+            )
+        }
+
+        data class Leitura(val porte: Grau, val fundamento: String)
+
+        companion object {
+            const val ORIENTACAO =
+                "Informe um valor fora do ponto exato do limite para obter um enquadramento, ou " +
+                    "leve as duas leituras à Unidade Regional (URA) antes de formalizar. Em " +
+                    "decisão pública deferida já consultada sob a DN 217, uma área útil de " +
+                    "exatamente 5 ha nesta atividade foi tratada como porte MÉDIO — é prática " +
+                    "observada da Administração, não regra escrita, e não vincula ninguém."
+        }
+    }
+
+    /**
      * O valor informado está ABAIXO do menor porte previsto para a atividade.
      *
      * ISTO NÃO É ERRO — É RESULTADO, e a norma o prevê expressamente. A DN 217 escreve 74
@@ -109,6 +162,13 @@ object Enquadramento {
         if (!usarAlternativa && piso != null) {
             val dentro = if (atividade.pisoExclusivo) valor > piso else valor >= piso
             if (!dentro) throw PorteInferior(atividade, valor, piso, atividade.unidade ?: "")
+        }
+
+        // Lacuna de redacao: valor para o qual a norma nao define faixa alguma.
+        // Vem ANTES da decisao de porte, porque qualquer porte devolvido aqui seria escolha
+        // do aplicativo, nao da norma.
+        if (!usarAlternativa && atividade.valoresSemFaixa.any { kotlin.math.abs(valor - it) < 1e-9 }) {
+            throw LacunaDeFaixa(atividade, valor, atividade.unidade ?: "", limiteP, limiteM)
         }
 
         val pequeno = if (atividade.limitePExclusivo) valor < limiteP else valor <= limiteP
