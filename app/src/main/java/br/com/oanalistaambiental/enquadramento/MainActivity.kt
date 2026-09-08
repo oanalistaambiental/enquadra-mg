@@ -41,7 +41,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Rota { INICIO, ATIVIDADE, PORTE, LOCACIONAL, RESULTADO, NORMA }
+private enum class Rota { INICIO, ATIVIDADE, PORTE, LOCACIONAL, RESULTADO, DISPENSA, NORMA }
 
 @Composable
 private fun App() {
@@ -61,6 +61,7 @@ private fun App() {
             Rota.PORTE -> Rota.ATIVIDADE
             Rota.LOCACIONAL -> Rota.PORTE
             Rota.RESULTADO -> Rota.LOCACIONAL
+            Rota.DISPENSA -> Rota.PORTE
             Rota.INICIO -> Rota.INICIO
         }
     }
@@ -75,6 +76,8 @@ private fun App() {
                 voltar = { rota = Rota.INICIO })
             Rota.PORTE -> TelaPorte(vm,
                 avancar = { rota = Rota.LOCACIONAL },
+                // Porte inferior nao segue para criterio locacional: ja e resultado final.
+                avancarDispensa = { rota = Rota.DISPENSA },
                 voltar = { rota = Rota.ATIVIDADE })
             Rota.LOCACIONAL -> TelaLocacional(vm,
                 avancar = { rota = Rota.RESULTADO },
@@ -83,6 +86,10 @@ private fun App() {
                 exportar = { vm.exportarPdf(contexto) },
                 novaSimulacao = { vm.novaSimulacao(); rota = Rota.ATIVIDADE },
                 voltar = { rota = Rota.LOCACIONAL })
+            Rota.DISPENSA -> TelaDispensa(vm,
+                exportar = { vm.exportarDispensaPdf(contexto) },
+                novaSimulacao = { vm.novaSimulacao(); rota = Rota.ATIVIDADE },
+                voltar = { rota = Rota.PORTE })
             Rota.NORMA -> TelaNorma(vm) { rota = Rota.INICIO }
         }
         Mensagem(vm, Modifier.align(Alignment.BottomCenter))
