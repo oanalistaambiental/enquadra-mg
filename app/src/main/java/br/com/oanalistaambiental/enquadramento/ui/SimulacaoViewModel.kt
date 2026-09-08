@@ -48,7 +48,19 @@ class SimulacaoViewModel(app: Application) : AndroidViewModel(app) {
     private val _dispensa = MutableStateFlow<Dispensa.Resultado?>(null)
     val dispensa: StateFlow<Dispensa.Resultado?> = _dispensa
 
+    /**
+     * Valor que caiu numa LACUNA da norma — nenhuma faixa de porte o cobre.
+     *
+     * Estado proprio, e nao mensagem de erro, pela mesma razao da dispensa do art. 10: quem
+     * informou 5 ha em C-04-21-9 nao errou nada. Ver "erro" ali faria a pessoa achar que
+     * digitou errado e mexer no numero ate a tela parar de reclamar — que e exatamente o
+     * caminho para um enquadramento inventado.
+     */
+    private val _lacuna = MutableStateFlow<Enquadramento.LacunaDeFaixa?>(null)
+    val lacuna: StateFlow<Enquadramento.LacunaDeFaixa?> = _lacuna
+
     fun limparDispensa() { _dispensa.value = null }
+    fun limparLacuna() { _lacuna.value = null }
 
     /** Dispensa por a atividade não constar da Listagem do Anexo Único (art. 10, caput). */
     fun declararNaoListada(descricao: String) {
@@ -173,6 +185,7 @@ class SimulacaoViewModel(app: Application) : AndroidViewModel(app) {
         _resultado.value = null
         _deteccao.value = null
         _dispensa.value = null
+        _lacuna.value = null
         ultimaCoordenada = null
         _fatoresAutomaticos = emptySet()
     }
@@ -206,6 +219,7 @@ class SimulacaoViewModel(app: Application) : AndroidViewModel(app) {
         _porte.value = null
         _valorInformado.value = null
         _dispensa.value = null
+        _lacuna.value = null
         _potencialManual.value = null
 
         // Dependem da atividade, nao do lugar: nao podem atravessar a troca.
@@ -239,12 +253,14 @@ class SimulacaoViewModel(app: Application) : AndroidViewModel(app) {
         if (valor == null) {
             _porte.value = null
             _valorInformado.value = null
+            _lacuna.value = null
             return
         }
         runCatching { Enquadramento.porteDe(a, valor, usarAlternativa) }
             .onSuccess {
                 _porte.value = it
                 _dispensa.value = null
+                _lacuna.value = null
                 _valorInformado.value = ValorInformado(
                     valor,
                     (if (usarAlternativa) a.unidadeAlternativa else a.unidade) ?: "",
@@ -254,6 +270,7 @@ class SimulacaoViewModel(app: Application) : AndroidViewModel(app) {
             .onFailure { e ->
                 _porte.value = null
                 _valorInformado.value = null
+                _lacuna.value = null
                 if (e is Enquadramento.PorteInferior) {
                     // Nao e erro: e o resultado de dispensa do art. 10. Monta o resultado
                     // completo, com os tres deveres do paragrafo unico junto.
@@ -261,6 +278,11 @@ class SimulacaoViewModel(app: Application) : AndroidViewModel(app) {
                         e.atividade, e.valor,
                         (if (usarAlternativa) a.unidadeAlternativa else a.unidade) ?: ""
                     )
+                } else if (e is Enquadramento.LacunaDeFaixa) {
+                    // Tambem nao e erro: a NORMA nao define faixa para este valor exato.
+                    // Em vez de escolher um lado, a tela mostra as duas leituras.
+                    _dispensa.value = null
+                    _lacuna.value = e
                 } else {
                     _dispensa.value = null
                     _mensagem.value = e.message

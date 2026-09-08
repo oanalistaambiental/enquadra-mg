@@ -173,6 +173,7 @@ fun TelaPorte(
     var valor by rememberSaveable { mutableStateOf("") }
     var alternativa by rememberSaveable { mutableStateOf(false) }
     val dispensa by vm.dispensa.collectAsState()
+    val lacuna by vm.lacuna.collectAsState()
     val atividade = a ?: return Carregando("2. Porte e potencial", voltar)
     val manual = atividade.tipo == "manual"
 
@@ -284,6 +285,40 @@ fun TelaPorte(
                                     Botao("Ver a dispensa e o que continua obrigatório", principal = true) {
                                         avancarDispensa()
                                     }
+                                }
+                            }
+                            // Lacuna da norma: o valor exato nao cai em faixa nenhuma. Nao ha
+                            // botao aqui de proposito — nao existe resultado a mostrar, e
+                            // oferecer um seria fingir que a norma decidiu.
+                            lacuna?.let { l ->
+                                Spacer(Modifier.height(10.dp))
+                                Cartao {
+                                    Text(
+                                        "A DN 217 não define faixa para este valor",
+                                        color = Cores.alerta, fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold, lineHeight = 19.sp
+                                    )
+                                    Spacer(Modifier.height(6.dp))
+                                    Text(
+                                        "Em ${l.atividade.codigo} as três faixas foram escritas com " +
+                                            "desigualdade estrita, então ${l.parametroFormatado()} " +
+                                            "não pertence a Pequeno, nem a Médio, nem a Grande. " +
+                                            "É lacuna de redação da norma, não erro seu.",
+                                        color = Cores.texto, fontSize = 12.sp, lineHeight = 17.sp
+                                    )
+                                    Spacer(Modifier.height(10.dp))
+                                    Text("AS DUAS LEITURAS POSSÍVEIS",
+                                        color = Cores.textoFraco, fontSize = 10.5.sp, letterSpacing = 1.sp)
+                                    Spacer(Modifier.height(4.dp))
+                                    l.leituras().forEach { leitura ->
+                                        Text(
+                                            "• Porte ${leitura.porte.extenso.uppercase()} — ${leitura.fundamento}",
+                                            color = Cores.texto, fontSize = 12.sp, lineHeight = 17.sp
+                                        )
+                                        Spacer(Modifier.height(4.dp))
+                                    }
+                                    Spacer(Modifier.height(6.dp))
+                                    Aviso(Enquadramento.LacunaDeFaixa.ORIENTACAO, TipoAviso.ATENCAO)
                                 }
                             }
                             Spacer(Modifier.height(6.dp))

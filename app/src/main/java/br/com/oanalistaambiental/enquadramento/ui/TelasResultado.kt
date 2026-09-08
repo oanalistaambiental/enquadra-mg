@@ -368,6 +368,8 @@ fun TelaResultado(
                                 Decisoes.COMO_USAR,
                                 color = Cores.textoFraco, fontSize = 11.5.sp, lineHeight = 16.sp
                             )
+                            Spacer(Modifier.height(8.dp))
+                            Aviso(Decisoes.CUIDADO_NORMA_ANTIGA, TipoAviso.ATENCAO)
                             Spacer(Modifier.height(10.dp))
                             Botao("Abrir decisões do código $cod") { abrirLink(Decisoes.porAtividade(cod)) }
                             Spacer(Modifier.height(6.dp))
