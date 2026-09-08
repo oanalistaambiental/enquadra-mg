@@ -1,5 +1,6 @@
 package br.com.oanalistaambiental.enquadramento
 
+import br.com.oanalistaambiental.enquadramento.norma.Conferencia
 import br.com.oanalistaambiental.enquadramento.norma.Enquadramento
 import br.com.oanalistaambiental.enquadramento.norma.Grau
 import org.junit.Assert.*
@@ -168,11 +169,29 @@ class SimulacaoTest {
         assertEquals(365, res.prazoAnaliseDias)
     }
 
+    /**
+     * Este teste apontava para A-01-01-5, que era "divergente" porque duas cópias da norma
+     * discordavam sobre o potencial poluidor do Ar. Em 07/09/2026 o texto oficial resolveu a
+     * dúvida (Ar = P) e a atividade passou a OFICIAL — então o teste precisou de outro caso.
+     *
+     * O novo caso é uma divergência de outra natureza, e mais interessante: a redação da
+     * PRÓPRIA NORMA define a faixa Pequeno com piso ("2.400 t/ano < Matéria Prima Processada
+     * < 12.000 t/ano") e não diz o que vale abaixo dele. Não há resposta certa a dar — só o
+     * aviso. São 70 atividades nessa situação.
+     */
     @Test
-    fun `atividade com dado divergente avisa quem está usando`() {
-        val a = r.atividade("A-01-01-5")!!
+    fun `atividade com redação problemática na norma avisa quem está usando`() {
+        val a = r.atividade("B-01-03-1")!!
         val res = Enquadramento.simular(r, a, Grau.P, emptyList())
-        assertTrue("o aviso de divergência precisa chegar ao usuário", res.avisos.isNotEmpty())
+        assertTrue("o aviso sobre a redação da norma precisa chegar ao usuário", res.avisos.isNotEmpty())
+    }
+
+    /** E a atividade que o texto oficial resolveu não avisa mais nada. */
+    @Test
+    fun `dado resolvido pelo texto oficial nao avisa mais`() {
+        val a = r.atividade("A-01-01-5")!!
+        assertEquals(Conferencia.OFICIAL, a.conferencia)
+        assertEquals("o texto oficial diz Ar = P", Grau.P, a.pp.ar)
     }
 
     @Test

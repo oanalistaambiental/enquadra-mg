@@ -79,7 +79,17 @@ class BaseNormativaTest {
     @Test
     fun `a procedência da base está declarada`() {
         assertTrue(r.procedencia["norma"]!!.contains("217"))
+        val aviso = r.procedencia["aviso"]!!
+        // A garantia que este teste protege é que o app NUNCA se apresente como ato oficial.
+        // A redação mudou em 07/09/2026 — a Listagem de Atividades passou a vir do texto
+        // oficial do SIAM —, então o teste passou a conferir a substância e não a frase.
         assertTrue("a base precisa avisar que não é a publicação oficial",
-            r.procedencia["aviso"]!!.contains("NÃO é a publicação oficial"))
+            aviso.contains("NÃO são a publicação oficial") || aviso.contains("NÃO é a publicação oficial"))
+        assertTrue("a base precisa dizer que não vincula a Administração",
+            aviso.contains("não vincula a Administração Pública"))
+        assertTrue("a base precisa se declarar simulação",
+            aviso.contains("SIMULAÇÃO"))
+        assertTrue("a base precisa citar a fonte oficial da listagem",
+            r.procedencia["fonte_oficial"]?.contains("siam.mg.gov.br") == true)
     }
 }
