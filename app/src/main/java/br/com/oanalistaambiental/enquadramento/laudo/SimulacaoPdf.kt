@@ -8,6 +8,7 @@ import android.graphics.Paint
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import androidx.core.content.FileProvider
+import br.com.oanalistaambiental.enquadramento.norma.Dispensa
 import br.com.oanalistaambiental.enquadramento.norma.Enquadramento
 import br.com.oanalistaambiental.enquadramento.norma.Regras
 import java.io.File
@@ -28,6 +29,116 @@ object SimulacaoPdf {
     private const val ALTURA = 842
     private const val MARGEM = 44f
     private val fmt = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("pt", "BR"))
+
+    /**
+     * PDF do resultado de DISPENSA (art. 10).
+     *
+     * É o documento que banco e instituição financeira costumam pedir como "declaração de
+     * dispensa de licenciamento". Por isso a estrutura é deliberada: o resultado aparece uma
+     * vez, e os três deveres do parágrafo único ocupam a maior parte da folha. Um PDF em que
+     * "dispensado" aparece grande e as obrigações aparecem em rodapé seria pior que nenhum.
+     */
+    fun gerarDispensa(regras: Regras, d: Dispensa.Resultado, destino: File): File {
+        val doc = PdfDocument()
+        var numero = 1
+        var pagina = doc.startPage(PdfDocument.PageInfo.Builder(LARGURA, ALTURA, numero).create())
+        var c: Canvas = pagina.canvas
+        var y = MARGEM + 12f
+
+        fun titulo(size: Float, bold: Boolean = true) = Paint().apply {
+            color = Color.BLACK; textSize = size; isAntiAlias = true
+            typeface = Typeface.create(Typeface.SANS_SERIF, if (bold) Typeface.BOLD else Typeface.NORMAL)
+        }
+        fun cinza(size: Float) = Paint().apply {
+            color = Color.DKGRAY; textSize = size; isAntiAlias = true
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
+        }
+        fun quebrar(texto: String, p: Paint, largura: Float): List<String> {
+            val linhas = mutableListOf<String>()
+            for (paragrafo in texto.split("\n")) {
+                var atual = StringBuilder()
+                for (palavra in paragrafo.split(" ")) {
+                    val teste = if (atual.isEmpty()) palavra else "$atual $palavra"
+                    when {
+                        p.measureText(teste) <= largura -> atual = StringBuilder(teste)
+                        atual.isNotEmpty() -> { linhas += atual.toString(); atual = StringBuilder(palavra) }
+                        else -> {
+                            var pedaco = StringBuilder()
+                            for (ch in palavra) {
+                                if (p.measureText(pedaco.toString() + ch) > largura && pedaco.isNotEmpty()) {
+                                    linhas += pedaco.toString(); pedaco = StringBuilder()
+                                }
+                                pedaco.append(ch)
+                            }
+                            atual = pedaco
+                        }
+                    }
+                }
+                if (atual.isNotEmpty()) linhas += atual.toString()
+            }
+            return if (linhas.isEmpty()) listOf("") else linhas
+        }
+        fun escrever(texto: String, p: Paint, recuo: Float = 0f, espaco: Float = 14f) {
+            quebrar(texto, p, LARGURA - 2 * MARGEM - recuo).forEach { linha ->
+                if (y > ALTURA - MARGEM) {
+                    doc.finishPage(pagina)
+                    numero += 1
+                    pagina = doc.startPage(PdfDocument.PageInfo.Builder(LARGURA, ALTURA, numero).create())
+                    c = pagina.canvas
+                    y = MARGEM + 12f
+                }
+                c.drawText(linha, MARGEM + recuo, y, p)
+                y += espaco
+            }
+        }
+
+        try {
+            escrever("SIMULAÇÃO DE ENQUADRAMENTO AMBIENTAL", titulo(16f), espaco = 24f)
+            escrever(regras.procedencia["norma"] ?: "", cinza(10f))
+            escrever("Gerada em ${fmt.format(Date())}", cinza(10f), espaco = 22f)
+
+            escrever("RESULTADO", titulo(12f), espaco = 18f)
+            escrever(d.titulo, titulo(12f, false), espaco = 18f)
+            escrever(d.fundamento, cinza(10f), espaco = 14f)
+            d.atividade?.let {
+                escrever("Atividade: ${it.codigo} — ${it.descricao}", cinza(10f), espaco = 13f)
+            }
+            d.valorInformado?.let { escrever("Informado: ${it.descricao()}", cinza(10f), espaco = 13f) }
+            y += 10f
+
+            escrever("A DISPENSA NÃO EXIME O EMPREENDEDOR DO DEVER DE:", titulo(12f), espaco = 16f)
+            escrever(
+                "DN COPAM 217/2017, art. 10, parágrafo único. A dispensa é do processo de " +
+                    "licenciamento ambiental no âmbito estadual — e de mais nada.",
+                cinza(9.5f), espaco = 13f
+            )
+            y += 8f
+            d.deveres.forEach { dev ->
+                escrever("${dev.inciso} — ${dev.titulo}", titulo(10.5f, false), espaco = 14f)
+                escrever(dev.texto, cinza(9.5f), recuo = 10f, espaco = 12f)
+                escrever("Exemplos do que costuma incidir:", cinza(9f), recuo = 10f, espaco = 12f)
+                dev.exemplos.forEach { escrever("• $it", cinza(9.5f), recuo = 18f, espaco = 12f) }
+                y += 8f
+            }
+            escrever(
+                "A lista de exemplos não é exaustiva e não consta da norma: traduz o que " +
+                    "costuma incidir em Minas Gerais. Confira o caso concreto.",
+                cinza(9f), espaco = 12f
+            )
+            y += 10f
+
+            escrever("ATENÇÃO", titulo(12f), espaco = 16f)
+            d.avisos.forEach { escrever("• $it", cinza(9.5f), recuo = 8f, espaco = 12f); y += 4f }
+
+            FileOutputStream(destino).use { doc.writeTo(it) }
+        } catch (e: Throwable) {
+            runCatching { destino.delete() }
+            throw e
+        } finally {
+            runCatching { doc.close() }
+        }
+        return destino
+    }
 
     fun gerar(regras: Regras, r: Enquadramento.Resultado, destino: File): File {
         val doc = PdfDocument()
