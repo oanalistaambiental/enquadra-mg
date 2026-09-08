@@ -281,6 +281,23 @@ object SimulacaoPdf {
             y += 8f
         }
 
+        // Art. 18 — bloco proprio no laudo, com a condicao inteira. Quem le o parecer precisa
+        // saber que existe uma hipotese de modalidade diferente E que ninguem a aplicou aqui.
+        r.casoArt18?.let { caso ->
+            escrever("CASO ESPECIAL DA NORMA — ${caso.referencia}", titulo(12f), espaco = 16f)
+            escrever(caso.resumo, titulo(10f, false), espaco = 13f)
+            escrever("Só vale se for verdade que: ${caso.condicao}", cinza(9.5f), recuo = 8f, espaco = 12f)
+            caso.condicaoExtra?.let { escrever(it, cinza(9.5f), recuo = 8f, espaco = 12f) }
+            caso.segundaHipotese?.let { escrever(it, cinza(9.5f), recuo = 8f, espaco = 12f) }
+            escrever(
+                "Esta simulação NÃO aplicou o caso. A modalidade indicada acima é a da Tabela 3. " +
+                    "Confirmar a condição de fato é do empreendedor.",
+                cinza(9.5f), recuo = 8f, espaco = 12f
+            )
+            escrever(caso.texto, cinza(8.5f), recuo = 8f, espaco = 11f)
+            y += 8f
+        }
+
         escrever("PROCEDÊNCIA E LIMITES", titulo(12f), espaco = 16f)
         escrever(regras.procedencia["aviso"] ?: "", cinza(9.5f), espaco = 12f)
         escrever("Cobertura do catálogo: ${regras.procedencia["cobertura"] ?: "—"}", cinza(9.5f), espaco = 12f)
