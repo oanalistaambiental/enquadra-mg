@@ -149,6 +149,9 @@ private fun Selo(c: Conferencia) {
         Conferencia.CRUZADO -> Triple(Cores.acentoClaro, Cores.acento, "conferido")
         Conferencia.UNICO -> Triple(Cores.atencaoClaro, Cores.atencao, "1 fonte")
         Conferencia.DIVERGENTE -> Triple(Cores.alertaClaro, Cores.alerta, "divergente")
+        // Faixa nova, e a melhor que existe: o dado veio do texto oficial da DN 217 no SIAM,
+        // campo a campo. Nao usa a cor de atencao — nao ha nada a conferir aqui.
+        Conferencia.OFICIAL -> Triple(Cores.acentoClaro, Cores.acento, "texto oficial")
     }
     Text(texto, color = cor, fontSize = 10.sp,
         modifier = Modifier.background(fundo, RoundedCornerShape(4.dp)).padding(horizontal = 7.dp, vertical = 3.dp))

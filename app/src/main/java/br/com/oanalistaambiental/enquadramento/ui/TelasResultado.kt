@@ -23,6 +23,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import br.com.oanalistaambiental.enquadramento.geo.Coordenadas
 import br.com.oanalistaambiental.enquadramento.geo.Utm
+import br.com.oanalistaambiental.enquadramento.norma.CasoEspecial
+import br.com.oanalistaambiental.enquadramento.norma.Decisoes
+import br.com.oanalistaambiental.enquadramento.norma.Dispensa
 import br.com.oanalistaambiental.enquadramento.norma.Grau
 
 /* ------------------------------------------------------- CRITÉRIO LOCACIONAL */
@@ -300,6 +303,44 @@ fun TelaResultado(
                 }
 
                 r.avisos.forEach { Spacer(Modifier.height(8.dp)); Aviso(it, TipoAviso.ATENCAO) }
+
+                // Art. 18 — o caso condicional ganha bloco proprio, e nao so uma linha de aviso.
+                // A condicao precisa caber inteira na tela: quem vai formalizar o processo tem
+                // de conseguir ler e dizer "isto e o meu caso" ou "nao e", sem abrir a norma.
+                r.casoArt18?.let { caso ->
+                    Rotulo("CASO ESPECIAL DA NORMA — ${caso.referencia.uppercase()}")
+                    Cartao {
+                        Text(
+                            caso.resumo,
+                            color = Cores.texto, fontSize = 13.sp, lineHeight = 19.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        Text("SÓ VALE SE FOR VERDADE QUE:",
+                            color = Cores.textoFraco, fontSize = 10.5.sp, letterSpacing = 1.sp)
+                        Spacer(Modifier.height(4.dp))
+                        Text(caso.condicao, color = Cores.texto, fontSize = 12.5.sp, lineHeight = 18.sp)
+                        caso.condicaoExtra?.let {
+                            Spacer(Modifier.height(8.dp))
+                            Text(it, color = Cores.texto, fontSize = 12.sp, lineHeight = 17.sp)
+                        }
+                        caso.segundaHipotese?.let {
+                            Spacer(Modifier.height(8.dp))
+                            Text(it, color = Cores.texto, fontSize = 12.sp, lineHeight = 17.sp)
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        Aviso(
+                            "O aplicativo NÃO aplicou este caso. A modalidade acima é a da " +
+                                "Tabela 3. Confirmar a condição é do empreendedor.",
+                            TipoAviso.ALERTA
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        Text("TEXTO DA NORMA",
+                            color = Cores.textoFraco, fontSize = 10.5.sp, letterSpacing = 1.sp)
+                        Spacer(Modifier.height(4.dp))
+                        Mono(caso.texto, tamanho = 11)
+                    }
+                }
 
                 Rotulo("O QUE ISSO SIGNIFICA")
                 Cartao {

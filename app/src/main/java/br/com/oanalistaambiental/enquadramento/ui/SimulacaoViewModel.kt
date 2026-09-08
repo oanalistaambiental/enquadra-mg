@@ -177,12 +177,49 @@ class SimulacaoViewModel(app: Application) : AndroidViewModel(app) {
         _fatoresAutomaticos = emptySet()
     }
 
+    /**
+     * Troca a atividade da simulacao em curso.
+     *
+     * BUG CORRIGIDO — o mesmo que a calculadora do site tinha e ja corrigiu. Antes esta funcao
+     * so limpava porte, valor e potencial. Tudo o que dependia da atividade e nao do lugar
+     * seguia marcado da atividade ANTERIOR:
+     *
+     *  - `_comEia` (o empreendedor apresentou EIA/RIMA). Marcado numa atividade classe 5 e
+     *    esquecido ao trocar para uma classe 3, ele mudava a modalidade da nova atividade sem
+     *    que nada na tela dissesse por que. E uma declaracao sobre UM empreendimento, nunca
+     *    sobre o lugar.
+     *  - `_resultado`. Ficava o da atividade anterior ate o proximo calculo, e o botao de
+     *    exportar PDF continuava ativo apontando para ele.
+     *
+     * O que NAO se apaga, de proposito: os criterios da Tabela 4, os fatores da Tabela 5, a
+     * deteccao das camadas e a coordenada. Esses descrevem o LUGAR, e o caso normal e simular
+     * varias atividades no mesmo ponto — apagar obrigaria a refazer a consulta a cada troca.
+     *
+     * Mas silencio tambem nao serve: quem trocou de atividade precisa SABER que as marcacoes
+     * do lugar continuam valendo, senao confere o resultado achando que partiu do zero. Por
+     * isso, havendo marcacao herdada, a troca avisa. Ausencia de aviso nao pode significar
+     * "nada foi herdado".
+     */
     fun escolherAtividade(a: Atividade) {
+        val trocou = _atividade.value?.codigo != a.codigo
         _atividade.value = a
         _porte.value = null
         _valorInformado.value = null
         _dispensa.value = null
         _potencialManual.value = null
+
+        // Dependem da atividade, nao do lugar: nao podem atravessar a troca.
+        _comEia.value = false
+        _resultado.value = null
+
+        if (trocou) {
+            val herdados = _marcados.value.size + _fatoresMarcados.value.size
+            if (herdados > 0) {
+                _mensagem.value = "Mantidos $herdados item(ns) locacional(is) marcado(s) do ponto " +
+                    "anterior — eles descrevem o local, nao a atividade. Confira na tela de " +
+                    "criterios locacionais antes de calcular."
+            }
+        }
     }
 
     fun definirPorteManual(g: Grau) { _porte.value = g }
