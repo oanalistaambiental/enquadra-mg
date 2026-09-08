@@ -157,13 +157,19 @@ private fun Selo(c: Conferencia) {
 /* ------------------------------------------------------------------- PORTE */
 
 @Composable
-fun TelaPorte(vm: SimulacaoViewModel, avancar: () -> Unit, voltar: () -> Unit) {
+fun TelaPorte(
+    vm: SimulacaoViewModel,
+    avancar: () -> Unit,
+    avancarDispensa: () -> Unit,
+    voltar: () -> Unit
+) {
     val a by vm.atividade.collectAsState()
     val porte by vm.porte.collectAsState()
     val potencial by vm.potencialManual.collectAsState()
     // rememberSaveable: girar o aparelho apagava o valor ja digitado.
     var valor by rememberSaveable { mutableStateOf("") }
     var alternativa by rememberSaveable { mutableStateOf(false) }
+    val dispensa by vm.dispensa.collectAsState()
     val atividade = a ?: return Carregando("2. Porte e potencial", voltar)
     val manual = atividade.tipo == "manual"
 
@@ -256,6 +262,27 @@ fun TelaPorte(vm: SimulacaoViewModel, avancar: () -> Unit, voltar: () -> Unit) {
                             // grandeza ANTES de seguir, que e onde o erro de casa decimal
                             // costuma passar despercebido.
                             val lido = Numeros.ler(valor)
+                            // Porte inferior nao e erro: e dispensa do art. 10. O cartao fica
+                            // ancorado no campo e leva direto ao resultado da dispensa.
+                            dispensa?.let { d ->
+                                Spacer(Modifier.height(10.dp))
+                                Cartao {
+                                    Text(
+                                        d.titulo,
+                                        color = Cores.acento, fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold, lineHeight = 19.sp
+                                    )
+                                    Spacer(Modifier.height(6.dp))
+                                    Text(
+                                        d.fundamento,
+                                        color = Cores.texto, fontSize = 12.sp, lineHeight = 17.sp
+                                    )
+                                    Spacer(Modifier.height(10.dp))
+                                    Botao("Ver a dispensa e o que continua obrigatório", principal = true) {
+                                        avancarDispensa()
+                                    }
+                                }
+                            }
                             Spacer(Modifier.height(6.dp))
                             Text(
                                 when {
@@ -295,6 +322,8 @@ fun TelaPorte(vm: SimulacaoViewModel, avancar: () -> Unit, voltar: () -> Unit) {
                             )
                             LinhaDado("Grande", "$acimaM ${num(lm)} $un", porte == Grau.G)
                         }
+                        // A nota da atividade explica lacuna, sobreposicao ou piso da propria
+                        // norma. Vem do texto oficial e precisa aparecer antes de escolher.
                         atividade.nota?.let { Aviso(it, TipoAviso.ATENCAO) }
                     }
                 }

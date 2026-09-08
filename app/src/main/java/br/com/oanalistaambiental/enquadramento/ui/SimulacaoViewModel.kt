@@ -40,6 +40,27 @@ class SimulacaoViewModel(app: Application) : AndroidViewModel(app) {
     private val _valorInformado = MutableStateFlow<ValorInformado?>(null)
     val valorInformado: StateFlow<ValorInformado?> = _valorInformado
 
+    /**
+     * Resultado de DISPENSA pelo art. 10 — porte inferior ao menor previsto, ou atividade não
+     * listada. Não é erro: é um dos resultados possíveis da simulação, e o que bancos pedem
+     * como "declaração de dispensa de licenciamento".
+     */
+    private val _dispensa = MutableStateFlow<Dispensa.Resultado?>(null)
+    val dispensa: StateFlow<Dispensa.Resultado?> = _dispensa
+
+    fun limparDispensa() { _dispensa.value = null }
+
+    /** Dispensa por a atividade não constar da Listagem do Anexo Único (art. 10, caput). */
+    fun declararNaoListada(descricao: String) {
+        if (descricao.isBlank()) {
+            _mensagem.value = "Descreva a atividade antes de concluir pela dispensa."
+            return
+        }
+        _dispensa.value = Dispensa.porNaoEstarListada(descricao.trim())
+        _porte.value = null
+        _resultado.value = null
+    }
+
     /** Modo manual: o usuário informa porte e potencial sem escolher atividade do catálogo. */
     private val _potencialManual = MutableStateFlow<Grau?>(null)
     val potencialManual: StateFlow<Grau?> = _potencialManual
@@ -151,6 +172,7 @@ class SimulacaoViewModel(app: Application) : AndroidViewModel(app) {
         _comEia.value = false
         _resultado.value = null
         _deteccao.value = null
+        _dispensa.value = null
         ultimaCoordenada = null
         _fatoresAutomaticos = emptySet()
     }
@@ -159,6 +181,7 @@ class SimulacaoViewModel(app: Application) : AndroidViewModel(app) {
         _atividade.value = a
         _porte.value = null
         _valorInformado.value = null
+        _dispensa.value = null
         _potencialManual.value = null
     }
 
@@ -184,13 +207,28 @@ class SimulacaoViewModel(app: Application) : AndroidViewModel(app) {
         runCatching { Enquadramento.porteDe(a, valor, usarAlternativa) }
             .onSuccess {
                 _porte.value = it
+                _dispensa.value = null
                 _valorInformado.value = ValorInformado(
                     valor,
                     (if (usarAlternativa) a.unidadeAlternativa else a.unidade) ?: "",
                     a.parametro
                 )
             }
-            .onFailure { _mensagem.value = it.message }
+            .onFailure { e ->
+                _porte.value = null
+                _valorInformado.value = null
+                if (e is Enquadramento.PorteInferior) {
+                    // Nao e erro: e o resultado de dispensa do art. 10. Monta o resultado
+                    // completo, com os tres deveres do paragrafo unico junto.
+                    _dispensa.value = Dispensa.porPorteInferior(
+                        e.atividade, e.valor,
+                        (if (usarAlternativa) a.unidadeAlternativa else a.unidade) ?: ""
+                    )
+                } else {
+                    _dispensa.value = null
+                    _mensagem.value = e.message
+                }
+            }
     }
 
     fun calcularPorteCategoria(rotulo: String) {
@@ -342,6 +380,24 @@ class SimulacaoViewModel(app: Application) : AndroidViewModel(app) {
                 SimulacaoPdf.gerar(r, res, File(pasta, "simulacao-${System.currentTimeMillis()}.pdf"))
             }.onSuccess { arquivo ->
                 // startActivity precisa da thread principal.
+                withContext(Dispatchers.Main) { SimulacaoPdf.compartilhar(contexto, arquivo) }
+            }.onFailure { _mensagem.value = "Não foi possível gerar o PDF: ${it.message}" }
+        }
+    }
+
+    /**
+     * PDF do resultado de dispensa. Separado do `exportarPdf` porque o documento é outro: ali
+     * é memória de cálculo de enquadramento, aqui é a "declaração de dispensa" que o banco pede
+     * — com os três deveres do art. 10 ocupando a maior parte da folha, de propósito.
+     */
+    fun exportarDispensaPdf(contexto: Context) {
+        val r = _regras.value ?: return
+        val d = _dispensa.value ?: run { _mensagem.value = "Nenhuma dispensa calculada."; return }
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val pasta = File(contexto.filesDir, "simulacoes").apply { mkdirs() }
+                SimulacaoPdf.gerarDispensa(r, d, File(pasta, "dispensa-${System.currentTimeMillis()}.pdf"))
+            }.onSuccess { arquivo ->
                 withContext(Dispatchers.Main) { SimulacaoPdf.compartilhar(contexto, arquivo) }
             }.onFailure { _mensagem.value = "Não foi possível gerar o PDF: ${it.message}" }
         }

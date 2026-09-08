@@ -9,6 +9,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import android.content.Intent
+import androidx.compose.ui.platform.LocalContext
+import android.net.Uri
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -251,6 +254,15 @@ fun TelaResultado(
     novaSimulacao: () -> Unit,
     voltar: () -> Unit
 ) {
+    val contexto = LocalContext.current
+    fun abrirLink(url: String) {
+        runCatching {
+            contexto.startActivity(
+                Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        }.onFailure { vm.avisar("Não foi possível abrir o navegador: ${it.message}") }
+    }
     val res by vm.resultado.collectAsState()
     val r = res ?: run {
         Column(Modifier.fillMaxSize().background(Cores.fundo).windowInsetsPadding(WindowInsets.safeDrawing)) {
@@ -297,6 +309,36 @@ fun TelaResultado(
                     LinhaDado("Etapas", "${r.modalidade.etapas}")
                     LinhaDado("Prazo de análise", "${r.prazoAnaliseDias} dias", destaque = true)
                     LinhaDado("Validade", r.modalidade.validadeTexto)
+                }
+
+                // Bloco novo: decisões públicas da MESMA atividade, filtradas por código.
+                // Nunca um processo específico — ver a documentação de Decisoes.kt.
+                r.valorInformado?.let { vi ->
+                    val cod = r.codigoAtividade
+                    if (cod != null && cod != "—") {
+                        Rotulo("DECISÕES JÁ DEFERIDAS DESTA ATIVIDADE")
+                        Cartao {
+                            Text(
+                                "Consulta pública do SISEMA, filtrada pelo código $cod.",
+                                color = Cores.texto, fontSize = 12.5.sp, lineHeight = 18.sp
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                Decisoes.COMO_USAR,
+                                color = Cores.textoFraco, fontSize = 11.5.sp, lineHeight = 16.sp
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            Botao("Abrir decisões do código $cod") { abrirLink(Decisoes.porAtividade(cod)) }
+                            Spacer(Modifier.height(6.dp))
+                            Botao("Portal Ecossistemas (visitante)") { abrirLink(Decisoes.ECOSSISTEMAS_VISITANTE) }
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "O app não mostra processo, empreendimento nem CNPJ: mostra a busca por " +
+                                    "atividade. Enquadramento de um empreendimento não vincula o de outro.",
+                                color = Cores.textoFraco, fontSize = 11.sp, lineHeight = 15.sp
+                            )
+                        }
+                    }
                 }
 
                 Rotulo("ESTUDOS EXIGIDOS")
@@ -464,6 +506,126 @@ fun TelaNorma(vm: SimulacaoViewModel, voltar: () -> Unit) {
                     Spacer(Modifier.height(8.dp))
                     LinhaDado("Extraída em", r.procedencia["extraido_em"] ?: "—")
                     LinhaDado("Cobertura", r.procedencia["cobertura"] ?: "—")
+                }
+                Spacer(Modifier.height(28.dp))
+            }
+        }
+    }
+}
+
+/* ------------------------------------------------------- DISPENSA (ART. 10) */
+
+/**
+ * Resultado de dispensa de licenciamento — art. 10 da DN 217.
+ *
+ * A tela foi desenhada em torno de um risco de comunicação, não de um cálculo: quem lê este
+ * resultado costuma ser um analista de crédito, e "dispensado" lido sozinho vira "não preciso
+ * de nada". Por isso a palavra dispensa nunca aparece aqui sem os três deveres do parágrafo
+ * único logo abaixo, no mesmo peso visual.
+ */
+@Composable
+fun TelaDispensa(
+    vm: SimulacaoViewModel,
+    exportar: () -> Unit,
+    novaSimulacao: () -> Unit,
+    voltar: () -> Unit
+) {
+    val d = vm.dispensa.collectAsState().value ?: run {
+        Column(Modifier.fillMaxSize().background(Cores.fundo).windowInsetsPadding(WindowInsets.safeDrawing)) {
+            Cabecalho("Dispensa", voltar = voltar)
+            Aviso("Nada calculado ainda.", TipoAviso.ATENCAO)
+        }
+        return
+    }
+
+    Column(Modifier.fillMaxSize().background(Cores.fundo).windowInsetsPadding(WindowInsets.safeDrawing)) {
+        Cabecalho("Dispensa de licenciamento", voltar = voltar)
+
+        LazyColumn(Modifier.weight(1f)) {
+            item {
+                Spacer(Modifier.height(12.dp))
+                Column(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                        .background(Cores.acento, RoundedCornerShape(8.dp)).padding(20.dp)
+                ) {
+                    Text("RESULTADO", color = Color(0xCCFFFFFF), fontSize = 11.sp, letterSpacing = 1.2.sp)
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        if (d.motivo == Dispensa.Motivo.PORTE_INFERIOR) "PORTE INFERIOR"
+                        else "NÃO LISTADA",
+                        color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "Dispensado do licenciamento ambiental no âmbito estadual",
+                        color = Color(0xE6FFFFFF), fontSize = 13.sp, lineHeight = 18.sp
+                    )
+                }
+
+                Rotulo("FUNDAMENTO")
+                Cartao {
+                    Text(d.fundamento, color = Cores.texto, fontSize = 12.5.sp, lineHeight = 18.sp)
+                    d.atividade?.let {
+                        Spacer(Modifier.height(8.dp))
+                        LinhaDado("Atividade", "${it.codigo} — ${it.descricao}")
+                    }
+                    d.valorInformado?.let {
+                        LinhaDado("Informado", it.descricao())
+                    }
+                }
+
+                // O bloco que impede a leitura apressada. Vem antes de qualquer botão.
+                Spacer(Modifier.height(14.dp))
+                Column(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                        .background(Cores.alerta, RoundedCornerShape(8.dp)).padding(16.dp)
+                ) {
+                    Text(
+                        "A DISPENSA NÃO EXIME DE NADA DISTO",
+                        color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "DN 217/2017, art. 10, parágrafo único. A dispensa é do processo de " +
+                            "licenciamento estadual — e de mais nada.",
+                        color = Color(0xE6FFFFFF), fontSize = 12.sp, lineHeight = 17.sp
+                    )
+                }
+
+                d.deveres.forEach { dev ->
+                    Rotulo("INCISO ${dev.inciso} — ${dev.titulo.uppercase()}")
+                    Cartao {
+                        Text(dev.texto, color = Cores.texto, fontSize = 12.5.sp, lineHeight = 18.sp)
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Exemplos do que costuma incidir:",
+                            color = Cores.textoFraco, fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        dev.exemplos.forEach {
+                            Text(
+                                "• $it", color = Cores.texto, fontSize = 12.sp, lineHeight = 17.sp,
+                                modifier = Modifier.padding(vertical = 2.dp)
+                            )
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "A lista de exemplos não é exaustiva e não está na norma: ela traduz " +
+                                "o que costuma incidir em Minas Gerais. Confira o caso concreto.",
+                            color = Cores.textoFraco, fontSize = 11.sp, lineHeight = 15.sp
+                        )
+                    }
+                }
+
+                Rotulo("ATENÇÃO")
+                d.avisos.forEach { Aviso(it, TipoAviso.ATENCAO); Spacer(Modifier.height(6.dp)) }
+
+                Spacer(Modifier.height(18.dp))
+                Column(Modifier.padding(horizontal = 16.dp)) {
+                    Botao("Exportar em PDF", principal = true) { exportar() }
+                    Spacer(Modifier.height(8.dp))
+                    Botao("Nova simulação") { novaSimulacao() }
                 }
                 Spacer(Modifier.height(28.dp))
             }
