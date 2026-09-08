@@ -46,7 +46,15 @@ object Enquadramento {
         /** O que a Tabela 3 tinha indicado, quando o art. 19 ou 20 substituiu a modalidade. */
         val modalidadeDaTabela3: String? = null,
         /** A referência do artigo que proibiu o Cadastro, quando houve. */
-        val restricaoCadastro: String? = null
+        val restricaoCadastro: String? = null,
+        /**
+         * Caso do art. 18 que incide sobre esta atividade, quando existe.
+         *
+         * Anexado ao resultado, NUNCA aplicado sozinho: a condição depende de fato que só o
+         * empreendedor confirma. A modalidade do resultado continua sendo a da Tabela 3
+         * (corrigida pelos arts. 19 e 20) — o caso entra como alerta a conferir.
+         */
+        val casoArt18: CasoEspecial? = null
     )
 
     class DadoFaltante(mensagem: String) : Exception(mensagem)
@@ -284,6 +292,20 @@ object Enquadramento {
                         (aplicada.motivo?.item?.nota?.let { " $it" } ?: "")
                 )
             }
+            // Art. 18: condicional, entra como alerta a conferir e nunca troca a modalidade.
+            regras.casosArt18.para(atividade.codigo)?.let { caso ->
+                add(when (caso.efeito) {
+                    CasoEspecial.Efeito.MODALIDADE_ALTERNATIVA ->
+                        "ATENÇÃO — ${caso.referencia}: a modalidade pode ser ${caso.modalidade} em vez " +
+                            "de ${modalidade.sigla}, mas só se for verdade que: ${caso.condicao} " +
+                            "Este aplicativo NÃO decide isso por você; confirme a condição antes de " +
+                            "formalizar."
+                    CasoEspecial.Efeito.EXIGENCIA_ADICIONAL ->
+                        "ATENÇÃO — ${caso.referencia}: ${caso.resumo}"
+                })
+                caso.segundaHipotese?.let { add("${caso.referencia}: $it") }
+                caso.condicaoExtra?.let { add("${caso.referencia} — condição associada: $it") }
+            }
             if (criteriosIncidentes.size > 1) add(
                 "Incidiram ${criteriosIncidentes.size} critérios locacionais. Os pesos não se somam: " +
                     "prevaleceu o de maior peso (art. 6º, §3º)."
@@ -314,7 +336,8 @@ object Enquadramento {
             criteriosAutomaticos = criteriosAutomaticos,
             codigoAtividade = atividade.codigo,
             modalidadeDaTabela3 = aplicada.substituiu?.sigla,
-            restricaoCadastro = aplicada.motivo?.referencia
+            restricaoCadastro = aplicada.motivo?.referencia,
+            casoArt18 = regras.casosArt18.para(atividade.codigo)
         )
     }
 }

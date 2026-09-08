@@ -169,6 +169,50 @@ data class ItemRestricao(
     val nota: String? = null
 )
 
+/**
+ * Caso especial do art. 18: uma regra que a Tabela 3 sozinha não resolve.
+ *
+ * São quatro situações (F-02-01-1, E-01-09-0, E-02-01-1 e E-02-01-2) em que a modalidade pode
+ * ser outra, ou em que o cadastro exige documento adicional — mas SEMPRE condicionadas a fatos
+ * que o aplicativo não tem como saber: se a obra é ampliação dentro do sítio aeroportuário, se
+ * é recapacitação e não usina nova, se a quantidade transportada é limitada na forma da ANTT.
+ *
+ * Por isso [Efeito] não troca nada sozinho. A simulação segue pela Tabela 3 e o caso é
+ * ANEXADO ao resultado como aviso, com a condição escrita e o texto do parágrafo. Trocar a
+ * modalidade a partir de um fato presumido seria pior que não avisar: o usuário levaria para o
+ * processo uma modalidade que o app escolheu por ele com base num "se" que ninguém confirmou.
+ */
+data class CasoEspecial(
+    val codigo: String,
+    val nome: String,
+    /** "art. 18, §2º" — o que se cita no parecer. */
+    val referencia: String,
+    val efeito: Efeito,
+    /** O que precisa ser verdade para o caso incidir. Vai inteira para a tela e para o PDF. */
+    val condicao: String,
+    val resumo: String,
+    /** Texto do parágrafo, literal, para quem confere. */
+    val texto: String,
+    /** Sigla da modalidade alternativa, quando [efeito] é [Efeito.MODALIDADE_ALTERNATIVA]. */
+    val modalidade: String? = null,
+    val segundaHipotese: String? = null,
+    val condicaoExtra: String? = null,
+    val armadilha: String? = null
+) {
+    enum class Efeito {
+        /** A modalidade pode ser outra, se a condição for verdadeira. */
+        MODALIDADE_ALTERNATIVA,
+        /** A modalidade é a mesma, mas o processo exige documento a mais. */
+        EXIGENCIA_ADICIONAL
+    }
+}
+
+/** Os casos do art. 18, indexados por código de atividade. */
+data class CasosArt18(val porCodigo: Map<String, CasoEspecial>) {
+    fun para(codigo: String): CasoEspecial? = porCodigo[codigo]
+    companion object { val VAZIO = CasosArt18(emptyMap()) }
+}
+
 data class RegrasGerais(
     val prazoAnaliseDias: Int,
     val prazoAnaliseTexto: String,
@@ -190,6 +234,7 @@ data class Regras(
     val gerais: RegrasGerais,
     val atividades: List<Atividade>,
     val restricoesCadastro: RestricoesCadastro,
+    val casosArt18: CasosArt18 = CasosArt18.VAZIO,
     val procedencia: Map<String, String> = emptyMap()
 ) {
     fun modalidade(sigla: String): Modalidade? = modalidades.firstOrNull { it.sigla == sigla }

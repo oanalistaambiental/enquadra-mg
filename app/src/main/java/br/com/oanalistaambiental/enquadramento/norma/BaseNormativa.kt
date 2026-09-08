@@ -166,6 +166,32 @@ object BaseNormativa {
             classesAtingidas = classes
         )
 
+        // Art. 18 — casos condicionais. Carregados como AVISO, nunca como troca automatica.
+        val casos18 = rest.optJSONObject("art18")?.optJSONArray("casos")?.let { arr ->
+            (0 until arr.length()).mapNotNull { i ->
+                val o = arr.getJSONObject(i)
+                val efeito = when (o.optString("efeito")) {
+                    "MODALIDADE_ALTERNATIVA" -> CasoEspecial.Efeito.MODALIDADE_ALTERNATIVA
+                    "EXIGENCIA_ADICIONAL" -> CasoEspecial.Efeito.EXIGENCIA_ADICIONAL
+                    else -> return@mapNotNull null
+                }
+                val c = o.getString("codigo")
+                c to CasoEspecial(
+                    codigo = c,
+                    nome = o.optString("nome"),
+                    referencia = o.optString("referencia"),
+                    efeito = efeito,
+                    condicao = o.optString("condicao"),
+                    resumo = o.optString("resumo"),
+                    texto = o.optString("texto"),
+                    modalidade = o.optString("modalidade").ifBlank { null },
+                    segundaHipotese = o.optString("segunda_hipotese").ifBlank { null },
+                    condicaoExtra = o.optString("condicao_extra").ifBlank { null },
+                    armadilha = o.optString("armadilha").ifBlank { null }
+                )
+            }.toMap()
+        }?.let { CasosArt18(it) } ?: CasosArt18.VAZIO
+
         val procedencia = mapOf(
             "norma" to proc.getString("norma"),
             "extraido_em" to proc.getString("extraido_em"),
@@ -175,6 +201,6 @@ object BaseNormativa {
         )
 
         return Regras(tabela1, tabela2, tabela3, criterios, fatores, modalidades, gerais,
-            atividades, restricoes, procedencia)
+            atividades, restricoes, casos18, procedencia)
     }
 }
